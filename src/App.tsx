@@ -78,7 +78,7 @@ const App = () => {
 
   // --- 您的 Firebase 金鑰設定 (已填入) ---
   const firebaseConfig = {
-    apiKey: "AIzaSyDsGgkGsWS4sRIn3o9XzWmqGSbZg4i5Dc9g",
+    apiKey: "AIzaSyDsGkGsWS4sRIn3o9XzWmqGSbZg4i5Dc9g",
     authDomain: "sa-test-96792.firebaseapp.com",
     projectId: "sa-test-96792",
     storageBucket: "sa-test-96792.firebasestorage.app",
