@@ -6,7 +6,7 @@ import {
   Table as TableIcon, LayoutDashboard, Edit3, X, Trash,
   Download, Database, Layers, Sparkles, MessageSquare, Loader2,
   TrendingUp, DollarSign, Calendar, PieChart, BarChart3, Calculator,
-  Cloud, CloudOff, Save, Archive, Plus, Trash2, MapPin, Package
+  Cloud, CloudOff, Save, Archive, Plus, Trash2, MapPin, Package, KeyRound
 } from 'lucide-react';
 
 // --- Firebase Imports ---
@@ -19,7 +19,6 @@ import {
 } from 'firebase/firestore';
 
 // --- 設定區：請在此填入您的 Firebase 設定 ---
-// 您可以在 Firebase Console -> Project Settings -> General -> Your apps 找到這些資訊
 const firebaseConfig = {
   apiKey: "AIzaSyDsGkGsWS4sRIn3o9XzWmqGSbZg4i5Dc9g",
   authDomain: "sa-test-96792.firebaseapp.com",
@@ -30,12 +29,11 @@ const firebaseConfig = {
   measurementId: "G-1X3X3FWSM7"
 };
 
-// --- 設定區：Gemini API Key ---
-// 建議在實際專案中使用 import.meta.env.VITE_GEMINI_KEY
-const GEMINI_API_KEY = "AIzaSyAxuPefSSv7M2iJKtE-rXkx1m3mJIhe9oY"; 
+// --- API Key Default ---
+const apiKey = "AIzaSyAxuPefSSv7M2iJKtE-rXkx1m3mJIhe9oY"; 
 
 // --- 獨立的 AI Modal 組件 ---
-const AiModal = ({ show, onClose, prompt, setPrompt, onSend, response, loading }) => {
+const AiModal = ({ show, onClose, prompt, setPrompt, onSend, response, loading, hasKey }) => {
   if (!show) return null;
 
   return (
@@ -48,6 +46,16 @@ const AiModal = ({ show, onClose, prompt, setPrompt, onSend, response, loading }
           <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full"><X className="w-5 h-5 text-slate-500" /></button>
         </div>
         <div className="flex-1 overflow-auto p-6 bg-slate-50">
+          {!hasKey && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm flex gap-2 items-start">
+               <KeyRound className="w-5 h-5 shrink-0" />
+               <div>
+                 <p className="font-bold">尚未設定 Gemini API Key</p>
+                 <p>請前往「設定」頁面輸入您的 API Key 才能使用 AI 分析功能。</p>
+               </div>
+            </div>
+          )}
+          
           {response ? (
              <div className="prose prose-sm max-w-none bg-white p-6 rounded-xl shadow-sm border border-slate-100">
                <div className="whitespace-pre-wrap leading-relaxed text-slate-700">{response}</div>
@@ -62,16 +70,17 @@ const AiModal = ({ show, onClose, prompt, setPrompt, onSend, response, loading }
         <div className="p-4 bg-white border-t flex gap-2">
           <input 
             type="text" 
-            className="flex-1 border rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+            className="flex-1 border rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:outline-none disabled:bg-slate-100"
             placeholder="例如：統計本月南泰廠商的出貨總量？"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && onSend()}
+            onKeyDown={(e) => e.key === 'Enter' && !loading && hasKey && onSend()}
+            disabled={!hasKey}
             autoFocus
           />
           <button 
             onClick={onSend}
-            disabled={loading || !prompt}
+            disabled={loading || !prompt || !hasKey}
             className="bg-purple-600 text-white px-6 py-2 rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
@@ -83,14 +92,13 @@ const AiModal = ({ show, onClose, prompt, setPrompt, onSend, response, loading }
   );
 };
 
-// --- 改良版：詳細手動營收 Modal ---
+// --- Manual Revenue Modal ---
 const ManualRevenueModal = ({ show, onClose, onSave }) => {
-    // 預設日期為今天
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [client, setClient] = useState('');
     const [cabinetNo, setCabinetNo] = useState('');
     const [amount, setAmount] = useState('');
-    const [source, setSource] = useState('China'); // 預設來源
+    const [source, setSource] = useState('China');
     const [note, setNote] = useState('');
 
     if (!show) return null;
@@ -101,14 +109,13 @@ const ManualRevenueModal = ({ show, onClose, onSave }) => {
             return;
         }
         onSave({ 
-            date, // 儲存完整日期字串 YYYY-MM-DD
+            date, 
             client: client.toUpperCase(), 
             cabinetNo: cabinetNo || 'N/A',
             amount: parseFloat(amount), 
             source, 
             note 
         });
-        // 重置表單但保留日期和來源，方便連續輸入
         setClient('');
         setCabinetNo('');
         setAmount('');
@@ -171,17 +178,15 @@ const ManualRevenueModal = ({ show, onClose, onSave }) => {
 
 const App = () => {
   // --- Firebase Init ---
-  // 初始化 Firebase App
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
-  // StackBlitz 或單機環境通常只有一個 App ID
   const appId = 'default-app-id'; 
 
   // --- State ---
   const [user, setUser] = useState(null);
   const [dbReady, setDbReady] = useState(false);
-  const [syncStatus, setSyncStatus] = useState('idle'); // idle, syncing, error
+  const [syncStatus, setSyncStatus] = useState('idle');
   
   const [masterData, setMasterData] = useState([]); 
   const [manualRevenueData, setManualRevenueData] = useState([]); 
@@ -196,7 +201,12 @@ const App = () => {
   const [editingId, setEditingId] = useState(null);
   const editValues = useRef({}); 
 
-  // --- Modal States ---
+  // --- AI States ---
+  // 新增：使用者自訂 API Key，預設從 localStorage 讀取
+  const [userApiKey, setUserApiKey] = useState(() => {
+    return localStorage.getItem('everise_gemini_key') || '';
+  });
+  
   const [showAiModal, setShowAiModal] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiResponse, setAiResponse] = useState('');
@@ -222,7 +232,6 @@ const App = () => {
 
   // --- Auth & Data Sync ---
   useEffect(() => {
-    // 匿名登入 (若 Firebase Console 已開啟匿名驗證)
     signInAnonymously(auth).catch((error) => {
         console.error("Auth Error:", error);
     });
@@ -462,7 +471,11 @@ const App = () => {
     const initMonth = (monthKey, year, month) => {
         if (!stats[monthKey]) {
             stats[monthKey] = { 
-                monthKey, year, month, total: 0, 
+                monthKey, year, month, 
+                total: 0, 
+                warehouseTotal: 0, 
+                chinaTotal: 0, 
+                otherTotal: 0,
                 clientMap: {} 
             };
         }
@@ -472,6 +485,14 @@ const App = () => {
         if (!client) return;
         const m = stats[monthKey];
         m.total += amount;
+
+        if (source === 'Warehouse') {
+            m.warehouseTotal += amount;
+        } else if (source === 'China') {
+            m.chinaTotal += amount;
+        } else {
+            m.otherTotal += amount;
+        }
 
         if (!m.clientMap[client]) {
             m.clientMap[client] = { total: 0, sources: {} };
@@ -484,7 +505,6 @@ const App = () => {
         m.clientMap[client].sources[source] += amount;
     };
 
-    // 1. Master Data (Warehouse)
     masterData.forEach(order => {
         if (!order.shippedQty || !order.price) return;
         let dateObj = new Date(order.date);
@@ -498,7 +518,6 @@ const App = () => {
         addAmount(monthKey, order.client, order.shippedQty * order.price, "Warehouse");
     });
 
-    // 2. Manual Data (China/Other)
     manualRevenueData.forEach(item => {
         let year, month, monthKey;
         if (item.date) {
@@ -518,7 +537,6 @@ const App = () => {
         addAmount(monthKey, item.client, item.amount, sourceLabel);
     });
 
-    // 3. 轉換格式供 UI 使用
     const combinedData = Object.values(stats).map(item => {
         const clients = Object.entries(item.clientMap)
             .map(([client, data]) => ({ 
@@ -527,7 +545,16 @@ const App = () => {
                 sources: data.sources
             }))
             .sort((a, b) => b.amount - a.amount);
-        return { monthKey: item.monthKey, year: item.year, month: item.month, total: item.total, clients };
+        return { 
+            monthKey: item.monthKey, 
+            year: item.year, 
+            month: item.month, 
+            total: item.total, 
+            warehouseTotal: item.warehouseTotal,
+            chinaTotal: item.chinaTotal,
+            otherTotal: item.otherTotal,
+            clients 
+        };
     }).sort((a, b) => b.monthKey.localeCompare(a.monthKey));
 
     setRevenueData(combinedData);
@@ -610,12 +637,15 @@ const App = () => {
   }, [masterData, clientConfig, sortedClients]);
 
   // --- AI & Export ---
+  const handleSaveApiKey = (newKey) => {
+      setUserApiKey(newKey);
+      localStorage.setItem('everise_gemini_key', newKey);
+  };
+
   const callGemini = async () => {
+    const keyToUse = userApiKey || apiKey;
     if (!aiPrompt.trim()) return;
-    if (!GEMINI_API_KEY) {
-        alert("請先設定 GEMINI_API_KEY");
-        return;
-    }
+
     setIsAiLoading(true);
     setAiResponse('');
     try {
@@ -623,18 +653,27 @@ const App = () => {
         date: d.date, client: d.client, product: d.product, qty: d.shippedQty,
       }));
       const revenueSummary = revenueData.slice(0, 6).map(r => 
-        `${r.monthKey}: Total ${r.total}, Top Clients: ${r.clients.slice(0,3).map(c=>c.client).join(',')}`
+        `${r.monthKey}: Total ${r.total}, Warehouse ${r.warehouseTotal}, China ${r.chinaTotal}`
       ).join('; ');
-      const systemInstruction = `分析師角色... 資料: ${revenueSummary} \n ${JSON.stringify(dataSummary)}`;
       
-      // 使用 fetch 呼叫 API (注意：在前端直接呼叫 API Key 會有安全風險，建議經由後端 Proxy)
+      const systemInstruction = `您是專業的訂單數據分析師。請根據以下數據回答問題。若無資料請回答不知道。
+      數據摘要: ${revenueSummary}
+      詳細訂單(前50筆): ${JSON.stringify(dataSummary)}`;
+      
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${keyToUse}`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: `${systemInstruction}\n\nQ: ${aiPrompt}` }] }] }) }
       );
+      
+      if (!response.ok) {
+          throw new Error(response.status === 400 ? 'API Key 無效或請求錯誤' : 'API 請求失敗');
+      }
+
       const data = await response.json();
       setAiResponse(data.candidates?.[0]?.content?.parts?.[0]?.text || "No response");
-    } catch (e) { setAiResponse(`Error: ${e.message}`); } finally { setIsAiLoading(false); }
+    } catch (e) { 
+        setAiResponse(`發生錯誤: ${e.message}。請檢查您的 API Key 是否正確。`); 
+    } finally { setIsAiLoading(false); }
   };
 
   const exportTrackingCSV = () => {
@@ -738,6 +777,24 @@ const App = () => {
                                 </div>
                                 <div className="mt-4 h-2 bg-slate-100 rounded-full overflow-hidden w-full">
                                     <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${(data.total / maxRevenue) * 100}%` }}></div>
+                                </div>
+                                
+                                {/* 新增：來源分類統計區塊 */}
+                                <div className="mt-4 space-y-2 border-t border-slate-100 pt-2">
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="text-slate-400 font-bold flex items-center gap-1"><Package className="w-3 h-3" /> 倉庫</span>
+                                        <span className="font-mono font-bold text-blue-600">{data.warehouseTotal.toLocaleString()}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="text-slate-400 font-bold flex items-center gap-1"><MapPin className="w-3 h-3" /> 中國</span>
+                                        <span className="font-mono font-bold text-red-500">{data.chinaTotal.toLocaleString()}</span>
+                                    </div>
+                                    {data.otherTotal > 0 && (
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="text-slate-400 font-bold flex items-center gap-1"><Hash className="w-3 h-3" /> 其他</span>
+                                            <span className="font-mono font-bold text-yellow-600">{data.otherTotal.toLocaleString()}</span>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                             <div className="flex-1 w-full">
@@ -1165,14 +1222,37 @@ const App = () => {
   const SettingsPanel = () => (
     <div className="max-w-2xl mx-auto p-12">
       <button onClick={() => setViewMode('dashboard')} className="flex items-center gap-3 text-slate-500 mb-8 font-bold"><ArrowLeft className="w-5 h-5" /> 返回</button>
-      <div className="bg-white rounded-2xl shadow-lg p-10 border border-slate-200 text-center">
-        <Hash className="w-12 h-12 text-blue-500 mx-auto mb-4" />
-        <h3 className="text-xl font-black text-slate-800 mb-6">匯入櫃號對照表 (Client Config)</h3>
-        <p className="text-slate-400 mb-6">匯入後將自動儲存到雲端，下次開啟無需再次匯入。</p>
-        <label className="block w-full py-12 border-2 border-dashed border-blue-200 rounded-xl text-blue-600 font-bold hover:bg-blue-50 transition-all cursor-pointer">
-          <Upload className="w-8 h-8 mx-auto mb-2" /> 點此選擇 CSV
-          <input type="file" accept=".csv" className="hidden" onChange={(e) => handleFileUpload(e)} />
-        </label>
+      <div className="grid gap-6">
+        {/* Gemini API Key Setting */}
+        <div className="bg-white rounded-2xl shadow-lg p-10 border border-slate-200">
+           <h3 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
+             <KeyRound className="w-6 h-6 text-purple-600" /> Google Gemini API 設定
+           </h3>
+           <p className="text-slate-500 mb-4 text-sm">
+             請輸入您的 Google Gemini API Key 以啟用 AI 分析功能。
+             <br/>
+             <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">點此免費獲取 API Key</a>
+           </p>
+           <input 
+             type="password" 
+             className="w-full border rounded-lg px-4 py-3 mb-4 bg-slate-50 font-mono text-sm"
+             placeholder="貼上您的 API Key (例如：AIzaSy...)"
+             value={userApiKey}
+             onChange={(e) => handleSaveApiKey(e.target.value)}
+           />
+           <div className="text-xs text-slate-400">Key 將自動儲存於您的瀏覽器 (Local Storage)。</div>
+        </div>
+
+        {/* CSV Upload */}
+        <div className="bg-white rounded-2xl shadow-lg p-10 border border-slate-200 text-center">
+          <Hash className="w-12 h-12 text-blue-500 mx-auto mb-4" />
+          <h3 className="text-xl font-black text-slate-800 mb-6">匯入櫃號對照表 (Client Config)</h3>
+          <p className="text-slate-400 mb-6">匯入後將自動儲存到雲端，下次開啟無需再次匯入。</p>
+          <label className="block w-full py-12 border-2 border-dashed border-blue-200 rounded-xl text-blue-600 font-bold hover:bg-blue-50 transition-all cursor-pointer">
+            <Upload className="w-8 h-8 mx-auto mb-2" /> 點此選擇 CSV
+            <input type="file" accept=".csv" className="hidden" onChange={(e) => handleFileUpload(e)} />
+          </label>
+        </div>
       </div>
     </div>
   );
@@ -1180,7 +1260,7 @@ const App = () => {
   return (
     <div className="bg-slate-50 min-h-screen font-sans selection:bg-emerald-100 text-slate-900">
       <Navbar />
-      <AiModal show={showAiModal} onClose={() => setShowAiModal(false)} prompt={aiPrompt} setPrompt={setAiPrompt} onSend={callGemini} response={aiResponse} loading={isAiLoading} />
+      <AiModal show={showAiModal} onClose={() => setShowAiModal(false)} prompt={aiPrompt} setPrompt={setAiPrompt} onSend={callGemini} response={aiResponse} loading={isAiLoading} hasKey={!!userApiKey || !!apiKey} />
       <ManualRevenueModal show={showRevenueModal} onClose={() => setShowRevenueModal(false)} onSave={addManualRevenue} />
       <main className="pb-40">
         {viewMode === 'dashboard' && <Dashboard />}
