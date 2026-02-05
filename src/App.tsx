@@ -30,7 +30,7 @@ const firebaseConfig = {
 };
 
 // --- API Key Default ---
-const apiKey = "AIzaSyAxuPefSSv7M2iJKtE-rXkx1m3mJIhe9oY"; 
+const apiKey = ""; 
 
 // --- 獨立的 AI Modal 組件 ---
 const AiModal = ({ show, onClose, prompt, setPrompt, onSend, response, loading, hasKey }) => {
