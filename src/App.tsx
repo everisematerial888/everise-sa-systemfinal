@@ -642,9 +642,54 @@ const App = () => {
       localStorage.setItem('everise_gemini_key', newKey);
   };
 
+  // --- AI & Export (修正版：補上金額單位與詳細價格) ---
   const callGemini = async () => {
     const keyToUse = userApiKey || apiKey;
     if (!aiPrompt.trim()) return;
+
+    setIsAiLoading(true);
+    setAiResponse('');
+    try {
+      // 修正 1: 補上單價 (price) 與該筆總額 (total)，讓 AI 有依據
+      const dataSummary = filteredMasterData.slice(0, 50).map(d => ({
+        date: d.date, 
+        client: d.client, 
+        product: d.product, 
+        qty: d.shippedQty,
+        price: d.price,              // 新增：單價
+        total: d.shippedQty * d.price // 新增：該筆總額
+      }));
+
+      // 修正 2: 在摘要中明確標示單位 (THB)
+      const revenueSummary = revenueData.slice(0, 6).map(r => 
+        `${r.monthKey}: 總營收 $${r.total.toLocaleString()} THB (倉庫: $${r.warehouseTotal.toLocaleString()}, 中國: $${r.chinaTotal.toLocaleString()})`
+      ).join('\n      ');
+      
+      const systemInstruction = `您是專業的訂單數據分析師。所有金額單位皆為泰銖 (THB)。
+      
+      【月度營收摘要 (這是準確的財務數據，請直接引用)】:
+      ${revenueSummary}
+
+      【詳細訂單範例 (前50筆，僅供參考品項與單價結構)】:
+      ${JSON.stringify(dataSummary)}
+      
+      請根據上述資訊回答問題。如果是詢問特定月份的營業額，請優先使用「月度營收摘要」的數據回答。`;
+      
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${keyToUse}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: `${systemInstruction}\n\nUser Question: ${aiPrompt}` }] }] }) }
+      );
+      
+      if (!response.ok) {
+          throw new Error(response.status === 400 ? 'API Key 無效或請求錯誤' : 'API 請求失敗');
+      }
+
+      const data = await response.json();
+      setAiResponse(data.candidates?.[0]?.content?.parts?.[0]?.text || "No response");
+    } catch (e) { 
+        setAiResponse(`發生錯誤: ${e.message}。請檢查您的 API Key 是否正確。`); 
+    } finally { setIsAiLoading(false); }
+  };
 
     setIsAiLoading(true);
     setAiResponse('');
