@@ -21,14 +21,13 @@ import {
 
 // --- 設定區：請在此填入您的 Firebase 設定 ---
 const firebaseConfig = {
-    apiKey: "AIzaSyDsGkGsWS4sRIn3o9XzWmqGSbZg4i5Dc9g",
-    authDomain: "sa-test-96792.firebaseapp.com",
-    projectId: "sa-test-96792",
-    storageBucket: "sa-test-96792.firebasestorage.app",
-    messagingSenderId: "736271192466",
-    appId: "1:736271192466:web:1517c3d40e3e61d1c1b14b",
-    measurementId: "G-1X3X3FWSM7"
-  };
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
+  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
 
 // --- API Key Default ---
 const apiKey = ""; 
@@ -173,6 +172,7 @@ const ManualRevenueModal = ({ show, onClose, onSave }) => {
                              </select>
                         </div>
                     </div>
+                    {/* ... (Same as before) ... */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-bold text-slate-500 mb-1">客戶名稱</label>
@@ -294,7 +294,6 @@ const App = () => {
 
   // --- Helper: Show Persistent Undo ---
   const showToast = (message, undoAction = null) => {
-      // 移除 setTimeout，讓它永久顯示直到被替換或關閉
       setToast({ visible: true, message, undoAction });
   };
 
@@ -358,7 +357,7 @@ const App = () => {
           });
           await batch.commit();
           setSyncStatus('idle');
-          showToast(`已成功刪除 ${targets.length} 筆資料`, null); // Batch delete no undo for safety
+          showToast(`已成功刪除 ${targets.length} 筆資料`, null); 
       } catch (err) {
           console.error("Batch delete error:", err);
           setSyncStatus('error');
@@ -377,26 +376,29 @@ const App = () => {
       return "待查";
   };
 
-  const getNextCabinetNumber = (client) => {
-      // 1. 優先查詢 Config (這是手動設定的基準)
+  const getNextCabinetNumber = (client, currentRunningMax = null) => {
+      // 1. 優先查詢 Config (手動設定的基準)
       const config = clientConfig[client];
-      
-      // 2. 查詢歷史最大值
-      const clientOrders = masterData.filter(d => d.client === client && d.cabinetNo);
-      let maxNum = 0;
-      const regex = /(\d+)$/;
-      clientOrders.forEach(d => {
-          const match = d.cabinetNo.match(regex);
-          if (match) {
-              const num = parseInt(match[1], 10);
-              if (num > maxNum) maxNum = num;
-          }
-      });
-
-      // 3. 邏輯判定：如果歷史最大值大於 Config 設定的起始值，就用歷史值+1，否則用 Config
-      // 這確保了如果使用者在 Config 設定了新的起始值 (例如 800)，系統會從 800 開始
       const startNum = config ? config.startNo : 1;
+
+      // 2. 如果沒有提供目前的運行最大值，則從資料庫查
+      let maxNum = 0;
       
+      if (currentRunningMax !== null) {
+          maxNum = currentRunningMax;
+      } else {
+          const clientOrders = masterData.filter(d => d.client === client && d.cabinetNo);
+          const regex = /(\d+)$/;
+          clientOrders.forEach(d => {
+              const match = d.cabinetNo.match(regex);
+              if (match) {
+                  const num = parseInt(match[1], 10);
+                  if (num > maxNum) maxNum = num;
+              }
+          });
+      }
+
+      // 3. 邏輯判定
       if (maxNum >= startNum) {
           return maxNum + 1;
       } else {
@@ -477,8 +479,16 @@ const App = () => {
     };
 
     const promises = [];
-    const tempCabinetCounter = {}; 
+    const addedIds = []; // Track for Undo
+    
+    // Smart Grouping: Track cabinet numbers by "Client+Date"
+    const assignedCabinetMap = {}; // Key: "CLIENT-DATE", Value: "CABINET_NO"
+    const clientRunningMaxMap = {}; // Key: "CLIENT", Value: int (max number found so far)
 
+    // Initialize running max from DB for involved clients
+    // (This is a simplified approach; in a real large app, we might need async fetch per client)
+    // Here we assume getNextCabinetNumber can sync with masterData state
+    
     rows.slice(1).forEach((row, rIdx) => {
         const cols = parseCSVLine(row);
         if (cols.length < 3) return;
@@ -486,23 +496,43 @@ const App = () => {
         let clientName = cols[idx.client] || (file.name.includes('AP') ? 'AP' : 'Unknown');
         if (file.name.includes('APS')) clientName = 'APS'; 
         clientName = clientName.toUpperCase().trim();
+        const dateStr = cols[idx.date] || '';
 
         const productName = cols[idx.product] ? cols[idx.product].trim() : '';
         let vendor = idx.vendor !== -1 && cols[idx.vendor] ? cols[idx.vendor] : getPredictiveVendor(clientName, productName);
         let cabinetNo = cols[idx.cabinet] || '';
         
         if (!cabinetNo) {
-            if (tempCabinetCounter[clientName] === undefined) {
-                tempCabinetCounter[clientName] = getNextCabinetNumber(clientName);
+            const groupKey = `${clientName}-${dateStr}`;
+            
+            // 1. Check if we already assigned a cabinet for this Client+Date in this batch
+            if (assignedCabinetMap[groupKey]) {
+                cabinetNo = assignedCabinetMap[groupKey];
+            } else {
+                // 2. Need a new number. Check running max.
+                if (clientRunningMaxMap[clientName] === undefined) {
+                    // First time seeing this client in this batch, get max from DB (minus 1 to start fresh increment)
+                    // Note: getNextCabinetNumber returns "next" number. So running max is next - 1.
+                    const dbNext = getNextCabinetNumber(clientName);
+                    clientRunningMaxMap[clientName] = dbNext - 1;
+                }
+                
+                // Increment
+                clientRunningMaxMap[clientName]++;
+                const currentNum = clientRunningMaxMap[clientName];
+                
+                const prefix = clientConfig[clientName]?.prefix || clientName;
+                cabinetNo = `${prefix}#${currentNum}`;
+                
+                // Save for other rows with same date
+                assignedCabinetMap[groupKey] = cabinetNo;
             }
-            const currentNum = tempCabinetCounter[clientName];
-            const prefix = clientConfig[clientName]?.prefix || clientName;
-            cabinetNo = `${prefix}#${currentNum}`;
         }
 
+        const docId = `${file.name}-${rIdx}-${Date.now()}`;
         const data = {
-            id: `${file.name}-${rIdx}-${Date.now()}`,
-            date: cols[idx.date] || '',
+            id: docId,
+            date: dateStr,
             client: clientName,
             product: productName,
             color: cols[idx.color] || '',
@@ -519,11 +549,20 @@ const App = () => {
             timestamp: Date.now()
         };
         promises.push(saveMasterDataRow(data));
+        addedIds.push(docId);
     });
 
     await Promise.all(promises);
     setSyncStatus('idle');
-    showToast(`成功匯入 ${promises.length} 筆資料`, null); // No undo for import in this version
+    
+    // Enable Undo for Import
+    showToast(`成功匯入 ${promises.length} 筆資料`, async () => {
+        // Simple Undo: Delete the docs we just added
+        // Note: Promise.all is used here for simplicity. 
+        await Promise.all(addedIds.map(id => deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'master_data', id))));
+        dismissToast();
+    });
+    
     if (viewMode !== 'revenueStats') setViewMode('dashboard');
   };
 
@@ -628,7 +667,7 @@ const App = () => {
       <div className="flex items-center gap-6">
         <h1 className="text-xl font-black text-white tracking-tighter flex items-center gap-2">
           <Database className="w-6 h-6 text-emerald-400" />
-          EVERISE <span className="text-xs font-normal text-slate-400">V10.1</span>
+          EVERISE <span className="text-xs font-normal text-slate-400">V10.2</span>
         </h1>
         <div className="flex bg-slate-800 p-1 rounded-lg overflow-x-auto">
           {[
@@ -743,7 +782,7 @@ const App = () => {
             </div>
             
             <div className="hidden print:block text-center text-xs text-slate-400 mt-8">
-                Powered by EVERISE Cloud System V10.1
+                Powered by EVERISE Cloud System V10.2
             </div>
         </div>
     );
