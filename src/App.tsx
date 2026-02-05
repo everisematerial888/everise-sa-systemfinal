@@ -21,13 +21,14 @@ import {
 
 // --- 設定區：請在此填入您的 Firebase 設定 ---
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
-};
+    apiKey: "AIzaSyDsGkGsWS4sRIn3o9XzWmqGSbZg4i5Dc9g",
+    authDomain: "sa-test-96792.firebaseapp.com",
+    projectId: "sa-test-96792",
+    storageBucket: "sa-test-96792.firebasestorage.app",
+    messagingSenderId: "736271192466",
+    appId: "1:736271192466:web:1517c3d40e3e61d1c1b14b",
+    measurementId: "G-1X3X3FWSM7"
+  };
 
 // --- API Key Default ---
 const apiKey = ""; 
