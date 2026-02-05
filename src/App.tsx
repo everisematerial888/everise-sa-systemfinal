@@ -643,7 +643,8 @@ const App = () => {
   };
 
   // --- AI & Export (修正版：補上金額單位與詳細價格) ---
-  const callGemini = async () => {
+  // 必須加上 async，裡面的 await 才會生效
+const callGemini = async () => {
     const keyToUse = userApiKey || apiKey;
     if (!aiPrompt.trim()) return;
 
