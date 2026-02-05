@@ -7,7 +7,7 @@ import {
   Download, Database, Layers, Sparkles, MessageSquare, Loader2,
   TrendingUp, DollarSign, Calendar, PieChart, BarChart3, Calculator,
   Cloud, CloudOff, Save, Archive, Plus, Trash2, MapPin, Package, KeyRound,
-  RotateCcw, History
+  RotateCcw, History, RefreshCw
 } from 'lucide-react';
 
 // --- Firebase Imports ---
@@ -21,35 +21,39 @@ import {
 
 // --- 設定區：請在此填入您的 Firebase 設定 ---
 const firebaseConfig = {
-    apiKey: "AIzaSyDsGkGsWS4sRIn3o9XzWmqGSbZg4i5Dc9g",
-    authDomain: "sa-test-96792.firebaseapp.com",
-    projectId: "sa-test-96792",
-    storageBucket: "sa-test-96792.firebasestorage.app",
-    messagingSenderId: "736271192466",
-    appId: "1:736271192466:web:1517c3d40e3e61d1c1b14b",
-    measurementId: "G-1X3X3FWSM7"
-  };
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
+  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
 
 // --- API Key Default ---
 const apiKey = ""; 
 
-// --- 輔助組件：Toast Notification (包含 Undo 功能) ---
-const Toast = ({ message, onUndo, visible }) => {
+// --- 輔助組件：永久駐留的操作歷史列 (Persistent Undo Bar) ---
+const PersistentUndoBar = ({ message, onUndo, onDismiss, visible }) => {
   if (!visible) return null;
   return (
-    <div className="fixed bottom-6 right-6 bg-slate-800 text-white px-6 py-4 rounded-lg shadow-2xl flex items-center gap-4 z-[200] animate-in slide-in-from-bottom-5 fade-in duration-300">
-      <div className="flex items-center gap-2">
-        <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-        <span className="font-bold">{message}</span>
+    <div className="fixed bottom-6 left-6 right-auto bg-slate-900 text-white pl-4 pr-2 py-3 rounded-lg shadow-2xl flex items-center gap-4 z-[200] animate-in slide-in-from-bottom-5 fade-in duration-300 border border-slate-700 max-w-md print:hidden">
+      <div className="flex items-center gap-3 flex-1">
+        <div className="bg-emerald-500 rounded-full p-1"><CheckCircle2 className="w-3 h-3 text-white" /></div>
+        <span className="font-bold text-sm">{message}</span>
       </div>
-      {onUndo && (
-        <button 
-          onClick={onUndo} 
-          className="bg-slate-600 hover:bg-slate-500 text-white px-3 py-1 rounded text-xs font-black uppercase tracking-wider flex items-center gap-1 transition-colors"
-        >
-          <RotateCcw className="w-3 h-3" /> 撤銷 (Undo)
+      <div className="flex items-center gap-1 border-l border-slate-700 pl-2">
+        {onUndo && (
+          <button 
+            onClick={onUndo} 
+            className="hover:bg-slate-700 text-emerald-400 px-3 py-2 rounded text-xs font-black uppercase tracking-wider flex items-center gap-1 transition-colors"
+          >
+            <RotateCcw className="w-3 h-3" /> 復原 (Undo)
+          </button>
+        )}
+        <button onClick={onDismiss} className="p-2 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors">
+            <X className="w-4 h-4" />
         </button>
-      )}
+      </div>
     </div>
   );
 };
@@ -168,7 +172,6 @@ const ManualRevenueModal = ({ show, onClose, onSave }) => {
                              </select>
                         </div>
                     </div>
-                    {/* 其他輸入欄位省略，保持原樣 */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-bold text-slate-500 mb-1">客戶名稱</label>
@@ -222,9 +225,8 @@ const App = () => {
   const [editingId, setEditingId] = useState(null);
   const editValues = useRef({}); 
 
-  // --- Undo System States ---
+  // --- Undo System States (Persistent) ---
   const [toast, setToast] = useState({ visible: false, message: '', undoAction: null });
-  const toastTimeoutRef = useRef(null);
 
   // --- AI States ---
   const [userApiKey, setUserApiKey] = useState(() => localStorage.getItem('everise_gemini_key') || '');
@@ -235,7 +237,7 @@ const App = () => {
   
   const [showRevenueModal, setShowRevenueModal] = useState(false); 
 
-  // --- 舊的 Config (現在主要作為 Fallback) ---
+  // --- Config State ---
   const [clientConfig, setClientConfig] = useState({
     "AP": { startNo: 954, prefix: "AP" },
     "PV": { startNo: 210, prefix: "PV" },
@@ -266,7 +268,6 @@ const App = () => {
     if (!user) return;
     setSyncStatus('syncing');
 
-    // 1. Master Data Listener
     const masterDataRef = collection(db, 'artifacts', appId, 'users', user.uid, 'master_data');
     const unsubMaster = onSnapshot(masterDataRef, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -274,7 +275,6 @@ const App = () => {
       setSyncStatus('idle');
     }, (error) => { console.error(error); setSyncStatus('error'); });
 
-    // 2. Client Config Listener
     const settingsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'config');
     const unsubSettings = onSnapshot(settingsRef, (docSnap) => {
       if (docSnap.exists() && docSnap.data().clientConfig) {
@@ -282,7 +282,6 @@ const App = () => {
       }
     }, (error) => console.error(error));
 
-    // 3. Manual Revenue Listener
     const revenueRef = collection(db, 'artifacts', appId, 'users', user.uid, 'manual_revenue');
     const unsubRevenue = onSnapshot(revenueRef, (snapshot) => {
         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -292,61 +291,53 @@ const App = () => {
     return () => { unsubMaster(); unsubSettings(); unsubRevenue(); };
   }, [user, db, appId]);
 
-  // --- Helper: Show Toast ---
+  // --- Helper: Show Persistent Undo ---
   const showToast = (message, undoAction = null) => {
-      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+      // 移除 setTimeout，讓它永久顯示直到被替換或關閉
       setToast({ visible: true, message, undoAction });
-      toastTimeoutRef.current = setTimeout(() => {
-          setToast(prev => ({ ...prev, visible: false }));
-      }, 5000); // 5秒後自動消失
   };
 
-  const performUndo = async () => {
-      if (toast.undoAction) {
-          await toast.undoAction();
-          setToast({ visible: false, message: '', undoAction: null });
-      }
+  const dismissToast = () => {
+      setToast(prev => ({ ...prev, visible: false }));
   };
 
-  // --- Firestore Actions with Undo Support ---
-  
+  // --- Firestore Actions ---
   const saveMasterDataRow = async (row) => {
     if (!user) return;
     const { id, ...data } = row;
     await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'master_data', id), data);
   };
 
+  const saveClientConfig = async (newConfig) => {
+    if (!user) return;
+    await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'config'), { clientConfig: newConfig }, { merge: true });
+  };
+
   const updateMasterDataRow = async (id, updates) => {
     if (!user) return;
-    // 1. Get original data for Undo
     const originalDoc = masterData.find(d => d.id === id);
     if (!originalDoc) return;
 
-    // 2. Perform Update
     await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'master_data', id), updates);
 
-    // 3. Show Toast with Undo
     showToast("已更新資料", async () => {
-        // Undo Logic: Revert to original data
         const { id: _, ...revertData } = originalDoc;
         await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'master_data', id), revertData);
+        dismissToast();
     });
   };
 
   const deleteMasterDataRow = async (id) => {
     if (!user) return;
-    // 1. Get data for Undo
     const deletedDoc = masterData.find(d => d.id === id);
     if(!deletedDoc) return;
 
-    // 2. Perform Delete
     await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'master_data', id));
 
-    // 3. Show Toast with Undo
     showToast("已刪除 1 筆資料", async () => {
-        // Undo Logic: Create it again
         const { id: docId, ...data } = deletedDoc;
         await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'master_data', docId), data);
+        dismissToast();
     });
   };
 
@@ -365,13 +356,8 @@ const App = () => {
               batch.delete(ref);
           });
           await batch.commit();
-          
           setSyncStatus('idle');
-          
-          // Batch Undo is complex due to size limits, but we can offer it for small batches or warn user.
-          // For simplicity in this demo, we won't offer Undo for Batch Delete to ensure stability.
-          showToast(`已成功刪除 ${targets.length} 筆資料 (批次刪除無法撤銷)`);
-
+          showToast(`已成功刪除 ${targets.length} 筆資料`, null); // Batch delete no undo for safety
       } catch (err) {
           console.error("Batch delete error:", err);
           setSyncStatus('error');
@@ -379,37 +365,25 @@ const App = () => {
       }
   };
 
-  // --- Intelligence: Smart Vendor & Auto Cabinet ---
-
-  // 1. 智慧廠商預測
+  // --- Intelligence ---
   const getPredictiveVendor = (client, product) => {
-      // 策略 A: 歷史紀錄 (Last Transaction Principle)
-      // 在現有的 masterData 中尋找該客戶 + 該產品的最新一筆紀錄
       const history = masterData
           .filter(d => d.client === client && d.product === product && d.vendor && d.vendor !== "待查")
-          .sort((a, b) => b.timestamp - a.timestamp); // 最新在前
-
-      if (history.length > 0) {
-          return history[0].vendor;
-      }
-
-      // 策略 B: 關鍵字規則 (Fallback)
+          .sort((a, b) => b.timestamp - a.timestamp);
+      if (history.length > 0) return history[0].vendor;
       const matchedRule = vendorRules.find(rule => product.toUpperCase().includes(rule.keyword.toUpperCase()));
-      if (matchedRule) {
-          return matchedRule.vendor;
-      }
-
-      return "待查"; // 最後防線
+      if (matchedRule) return matchedRule.vendor;
+      return "待查";
   };
 
-  // 2. 全自動櫃號編碼
   const getNextCabinetNumber = (client) => {
-      // 1. 找出該客戶所有已存在的櫃號 (格式通常是 CLIENT#123)
-      const clientOrders = masterData.filter(d => d.client === client && d.cabinetNo);
+      // 1. 優先查詢 Config (這是手動設定的基準)
+      const config = clientConfig[client];
       
+      // 2. 查詢歷史最大值
+      const clientOrders = masterData.filter(d => d.client === client && d.cabinetNo);
       let maxNum = 0;
-      const regex = /(\d+)$/; // 抓取結尾的數字
-
+      const regex = /(\d+)$/;
       clientOrders.forEach(d => {
           const match = d.cabinetNo.match(regex);
           if (match) {
@@ -418,17 +392,18 @@ const App = () => {
           }
       });
 
-      // 如果資料庫完全沒資料，回退使用 Config 中的設定，如果 Config 也沒，就從 1 開始
-      if (maxNum === 0) {
-          const config = clientConfig[client];
-          if (config) return config.startNo;
-          return 1;
+      // 3. 邏輯判定：如果歷史最大值大於 Config 設定的起始值，就用歷史值+1，否則用 Config
+      // 這確保了如果使用者在 Config 設定了新的起始值 (例如 800)，系統會從 800 開始
+      const startNum = config ? config.startNo : 1;
+      
+      if (maxNum >= startNum) {
+          return maxNum + 1;
+      } else {
+          return startNum;
       }
-
-      return maxNum + 1;
   };
 
-  // --- CSV Parser & Import Logic (Updated) ---
+  // --- Import ---
   const parseCSVLine = (line) => {
     const result = [];
     let cur = '';
@@ -462,10 +437,8 @@ const App = () => {
         const text = event.target.result;
         const rows = text.split(/\r?\n/).filter(r => r.trim());
         if (rows.length < 1) return;
-
         const headers = parseCSVLine(rows[0]).map(h => h.trim().toLowerCase());
         
-        // Check if it's a Config CSV (Old logic support)
         if (headers.includes('client') && (headers.includes('number') || rows[0].includes(',')) && rows[0].length < 50) {
           const newConfig = { ...clientConfig };
           rows.slice(1).forEach(row => {
@@ -477,7 +450,6 @@ const App = () => {
           saveClientConfig(newConfig); 
           return;
         }
-
         parseMasterDataCSV(file, rows, headers);
       };
       reader.readAsText(file);
@@ -504,13 +476,6 @@ const App = () => {
     };
 
     const promises = [];
-    
-    // 預先計算每個客戶的下一個櫃號 (Batch 處理)
-    // 這裡做個簡化：每次匯入同一個檔，同客戶的櫃號通常是一樣的，或是遞增的
-    // 如果 CSV 裡面有 'cabinet' 欄位，優先使用 CSV 的
-    // 如果 CSV 沒有，才使用自動編號
-    
-    // 建立一個臨時 Map 來追蹤這一次匯入過程中，各客戶用到幾號了
     const tempCabinetCounter = {}; 
 
     rows.slice(1).forEach((row, rIdx) => {
@@ -522,35 +487,16 @@ const App = () => {
         clientName = clientName.toUpperCase().trim();
 
         const productName = cols[idx.product] ? cols[idx.product].trim() : '';
-        
-        // 1. 智慧廠商判斷 (Smart Vendor)
         let vendor = idx.vendor !== -1 && cols[idx.vendor] ? cols[idx.vendor] : getPredictiveVendor(clientName, productName);
-
-        // 2. 自動櫃號邏輯 (Auto Cabinet)
         let cabinetNo = cols[idx.cabinet] || '';
         
         if (!cabinetNo) {
-            // 初始化計數器
             if (tempCabinetCounter[clientName] === undefined) {
                 tempCabinetCounter[clientName] = getNextCabinetNumber(clientName);
             }
-            
-            // 使用當前號碼
             const currentNum = tempCabinetCounter[clientName];
-            
-            // 決定前綴 (Prefix)
             const prefix = clientConfig[clientName]?.prefix || clientName;
-            
             cabinetNo = `${prefix}#${currentNum}`;
-
-            // 這裡有一個商業邏輯選擇：
-            // A. 整批 CSV 算同一櫃？ -> 不增加計數器
-            // B. 每一行算不同櫃？ -> 增加計數器
-            // 通常一張 Shipping Advice CSV 是同一櫃。
-            // 我們假設：如果日期不同，可能是不同櫃。如果日期相同，是同一櫃。
-            // 簡化策略：這次匯入的所有資料，如果沒有櫃號，統一編為「下一號」。
-            // 若需要更複雜邏輯 (例如依日期分櫃)，可在這裡修改。
-            // 目前邏輯：整批匯入視為同一櫃 (不增加 currentNum)
         }
 
         const data = {
@@ -576,31 +522,19 @@ const App = () => {
 
     await Promise.all(promises);
     setSyncStatus('idle');
-    
-    // Undo Import Capability
-    showToast(`成功匯入 ${promises.length} 筆資料`, async () => {
-        // Undo Logic: Delete all records with this source file name and close timestamp
-        // 這是個簡化的 Undo，實際上應該記錄剛匯入的 IDs
-        // 這裡為了簡單，我們不實作複雜的 Batch Undo，僅提示使用者可以去「資料來源管理」刪除
-        alert("匯入操作較複雜，若需撤銷，請前往「資料來源管理」刪除該批次。");
-    });
-
+    showToast(`成功匯入 ${promises.length} 筆資料`, null); // No undo for import in this version
     if (viewMode !== 'revenueStats') setViewMode('dashboard');
   };
 
-  // --- 營業額計算 ---
+  // --- Revenue ---
   const generateRevenueData = () => {
     const stats = {};
-    const initMonth = (monthKey, year, month) => {
-        if (!stats[monthKey]) stats[monthKey] = { monthKey, year, month, total: 0, warehouseTotal: 0, chinaTotal: 0, otherTotal: 0, clientMap: {} };
-    };
+    const initMonth = (monthKey, year, month) => { if (!stats[monthKey]) stats[monthKey] = { monthKey, year, month, total: 0, warehouseTotal: 0, chinaTotal: 0, otherTotal: 0, clientMap: {} }; };
     const addAmount = (monthKey, client, amount, source) => {
         if (!client) return;
         const m = stats[monthKey];
         m.total += amount;
-        if (source === 'Warehouse') m.warehouseTotal += amount;
-        else if (source === 'China') m.chinaTotal += amount;
-        else m.otherTotal += amount;
+        if (source === 'Warehouse') m.warehouseTotal += amount; else if (source === 'China') m.chinaTotal += amount; else m.otherTotal += amount;
         if (!m.clientMap[client]) m.clientMap[client] = { total: 0, sources: {} };
         m.clientMap[client].total += amount;
         m.clientMap[client].sources[source] = (m.clientMap[client].sources[source] || 0) + amount;
@@ -618,20 +552,13 @@ const App = () => {
     });
 
     manualRevenueData.forEach(item => {
-        let year, month, monthKey;
-        if (item.date) {
-            const d = new Date(item.date);
-            year = d.getFullYear();
-            month = d.getMonth() + 1;
-        } else {
-            year = item.year;
-            month = item.month;
-        }
+        let year, month;
+        if (item.date) { const d = new Date(item.date); year = d.getFullYear(); month = d.getMonth() + 1; } 
+        else { year = item.year; month = item.month; }
         if (!year || !month) return;
-        monthKey = `${year}-${String(month).padStart(2, '0')}`;
-        const sourceLabel = item.source || "China";
+        const monthKey = `${year}-${String(month).padStart(2, '0')}`;
         initMonth(monthKey, year, month);
-        addAmount(monthKey, item.client, item.amount, sourceLabel);
+        addAmount(monthKey, item.client, item.amount, item.source || "China");
     });
 
     const combinedData = Object.values(stats).map(item => {
@@ -642,9 +569,7 @@ const App = () => {
     setRevenueData(combinedData);
   };
 
-  useEffect(() => {
-    if (masterData.length > 0 || manualRevenueData.length > 0) generateRevenueData();
-  }, [masterData, manualRevenueData]);
+  useEffect(() => { if (masterData.length > 0 || manualRevenueData.length > 0) generateRevenueData(); }, [masterData, manualRevenueData]);
 
   // --- UI Handlers ---
   const startEditing = (record) => { setEditingId(record.id); editValues.current = { ...record }; };
@@ -653,6 +578,13 @@ const App = () => {
   const handleDelete = (id) => { if(window.confirm("確定要刪除此筆資料嗎？")) deleteMasterDataRow(id); };
   
   const handleSaveApiKey = (newKey) => { setUserApiKey(newKey); localStorage.setItem('everise_gemini_key', newKey); };
+  const handleClientConfigChange = (client, field, value) => {
+      setClientConfig(prev => {
+          const newConfig = { ...prev, [client]: { ...prev[client], [field]: value } };
+          saveClientConfig(newConfig); // Auto save to cloud
+          return newConfig;
+      });
+  };
 
   const callGemini = async () => {
     const keyToUse = userApiKey || apiKey;
@@ -661,8 +593,7 @@ const App = () => {
     try {
       const dataSummary = filteredMasterData.slice(0, 50).map(d => ({ date: d.date, client: d.client, product: d.product, qty: d.shippedQty, price: d.price, total: d.shippedQty * d.price }));
       const revenueSummary = revenueData.slice(0, 6).map(r => `${r.monthKey}: 總營收 $${r.total.toLocaleString()} THB (倉庫: $${r.warehouseTotal.toLocaleString()}, 中國: $${r.chinaTotal.toLocaleString()})`).join('\n      ');
-      const systemInstruction = `您是專業的訂單數據分析師。所有金額單位皆為泰銖 (THB)。\n\n【月度營收摘要 (這是準確的財務數據，請直接引用)】:\n${revenueSummary}\n\n【詳細訂單範例 (前50筆，僅供參考品項與單價結構)】:\n${JSON.stringify(dataSummary)}\n\n請根據上述資訊回答問題。如果是詢問特定月份的營業額，請優先使用「月度營收摘要」的數據回答。`;
-      
+      const systemInstruction = `您是專業的訂單數據分析師。所有金額單位皆為泰銖 (THB)。\n\n【月度營收摘要】:\n${revenueSummary}\n\n【詳細訂單範例】:\n${JSON.stringify(dataSummary)}\n\n請根據上述資訊回答問題。`;
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${keyToUse}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: `${systemInstruction}\n\nUser Question: ${aiPrompt}` }] }] }) });
       if (!response.ok) throw new Error('API Key 無效或請求錯誤');
       const data = await response.json();
@@ -696,7 +627,7 @@ const App = () => {
       <div className="flex items-center gap-6">
         <h1 className="text-xl font-black text-white tracking-tighter flex items-center gap-2">
           <Database className="w-6 h-6 text-emerald-400" />
-          EVERISE <span className="text-xs font-normal text-slate-400">V10.0 Pro</span>
+          EVERISE <span className="text-xs font-normal text-slate-400">V10.1</span>
         </h1>
         <div className="flex bg-slate-800 p-1 rounded-lg overflow-x-auto">
           {[
@@ -754,13 +685,11 @@ const App = () => {
                 </div>
             </div>
 
-            {/* Print Header (Only visible when printing) */}
             <div className="hidden print:block mb-6 text-center border-b pb-4">
                 <h1 className="text-2xl font-black">EVERISE - 年度營業額統計報表</h1>
                 <p className="text-sm text-slate-500">列印日期: {new Date().toLocaleDateString()}</p>
             </div>
             
-            {/* 圖表區 */}
             <div className="grid gap-6 mb-12 print:gap-4">
                 {revenueData.length === 0 ? (
                   <div className="text-center py-20 bg-white rounded-xl border border-dashed border-slate-300">
@@ -778,8 +707,6 @@ const App = () => {
                                     <span className="text-xs text-emerald-400">THB</span>
                                     {data.total.toLocaleString()}
                                 </div>
-                                
-                                {/* 來源分類 */}
                                 <div className="mt-4 space-y-2 border-t border-slate-100 pt-2 print:text-xs">
                                     <div className="flex justify-between items-center text-sm">
                                         <span className="text-slate-400 font-bold flex items-center gap-1"><Package className="w-3 h-3" /> 倉庫</span>
@@ -799,8 +726,6 @@ const App = () => {
                                                 <span className="text-xs font-black text-slate-700 truncate">{idx + 1}. {client.client}</span>
                                             </div>
                                             <span className="text-sm font-mono text-emerald-600 font-bold block">{client.amount.toLocaleString()}</span>
-                                            
-                                            {/* 來源佔比條 (Print時可用 CSS 調整顏色深度) */}
                                             <div className="mt-1 flex h-1.5 w-full rounded-full overflow-hidden bg-slate-200 print:h-2 print:border print:border-slate-300">
                                                 {client.sources['Warehouse'] > 0 && <div className="h-full bg-blue-400 print:bg-slate-600" style={{ width: `${(client.sources['Warehouse'] / client.amount) * 100}%` }}></div>}
                                                 {client.sources['China'] > 0 && <div className="h-full bg-red-400 print:bg-slate-400" style={{ width: `${(client.sources['China'] / client.amount) * 100}%` }}></div>}
@@ -817,72 +742,26 @@ const App = () => {
             </div>
             
             <div className="hidden print:block text-center text-xs text-slate-400 mt-8">
-                Powered by EVERISE Cloud System V10.0
+                Powered by EVERISE Cloud System V10.1
             </div>
         </div>
     );
   };
 
-  // ... (DataManagementView, TrackingTableView, MasterTableView, Dashboard, InvoiceTemplate, PrintAllView, SingleInvoiceView, SettingsPanel omitted for brevity, logic remains similar but integrated with updated state) ...
-  // *為節省篇幅，這部分與 V9.7 相似，但會整合上面的 Toast 和新邏輯。以下是完整結構的其餘部分*
-  
-  const sortedClients = useMemo(() => [...new Set(masterData.map(d => d.client))].sort(), [masterData]);
-
-  const filteredMasterData = useMemo(() => {
-    let data = masterData;
-    if (activeMasterClient !== 'ALL') data = data.filter(d => d.client === activeMasterClient);
-    if (searchTerm) {
-      const lowerTerm = searchTerm.toLowerCase();
-      data = data.filter(d => d.product.toLowerCase().includes(lowerTerm) || d.orderNo.toLowerCase().includes(lowerTerm) || d.vendor.includes(searchTerm));
-    }
-    return [...data].sort((a, b) => a.client !== b.client ? a.client.localeCompare(b.client) : new Date(a.date) - new Date(b.date));
-  }, [masterData, activeMasterClient, searchTerm]);
-
-  const groupedInvoices = useMemo(() => {
-    const result = {};
-    sortedClients.forEach(client => {
-      const clientRows = masterData.filter(d => d.client === client && d.shippedQty > 0);
-      const dates = [...new Set(clientRows.map(d => d.date))].sort((a, b) => new Date(a) - new Date(b));
-      
-      // Auto Cabinet Logic: Fallback for display if logic failed during import
-      const config = clientConfig[client] || { startNo: 1, prefix: client };
-      
-      result[client] = dates.map((date, dIdx) => {
-        const items = clientRows.filter(r => r.date === date);
-        // 優先使用資料庫中已存的櫃號，如果沒有(舊資料)，則自動產生顯示用
-        const cabinet = items[0]?.cabinetNo || `${config.prefix}#${config.startNo + dIdx}`;
-        return { id: `${client}-${date}`, date, cabinetNo: cabinet, client, items, total: items.reduce((s, i) => s + (i.shippedQty * i.price), 0) };
-      });
-    });
-    return result;
-  }, [masterData, clientConfig, sortedClients]);
-
-  // Views Components
+  // ... (DataManagementView, TrackingTableView, MasterTableView - Logic identical, just integrated with persistent bar) ...
+  // Re-implementing simplified views for brevity but maintaining structure
   const DataManagementView = () => {
     const sourceStats = useMemo(() => {
         const stats = {};
         masterData.forEach(d => { const src = d.source || 'Unknown'; stats[src] = (stats[src] || 0) + 1; });
         return Object.entries(stats).map(([source, count]) => ({ source, count }));
     }, [masterData]);
-
     return (
       <div className="p-8 max-w-4xl mx-auto min-h-screen bg-slate-50 animate-in fade-in">
           <h2 className="text-3xl font-black text-slate-800 flex items-center gap-3 mb-2"><Archive className="w-8 h-8 text-emerald-600" /> 資料來源管理</h2>
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-              <table className="w-full text-left">
-                  <thead className="bg-slate-100 text-xs font-bold text-slate-600 border-b border-slate-200">
-                      <tr><th className="p-4">來源檔案名稱</th><th className="p-4 text-center">筆數</th><th className="p-4 text-right">操作</th></tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                      {sourceStats.map((stat) => (
-                          <tr key={stat.source} className="hover:bg-red-50 group transition-colors">
-                              <td className="p-4 font-mono text-sm font-bold text-slate-700">{stat.source}</td>
-                              <td className="p-4 text-center"><span className="bg-slate-100 px-3 py-1 rounded-full text-xs font-black text-slate-600">{stat.count}</span></td>
-                              <td className="p-4 text-right"><button onClick={() => deleteBatchBySource(stat.source)} className="text-slate-400 hover:text-red-600 font-bold text-sm flex items-center gap-1 ml-auto transition-colors px-3 py-1 rounded hover:bg-red-100"><Trash2 className="w-4 h-4" /> 刪除整批</button></td>
-                          </tr>
-                      ))}
-                  </tbody>
-              </table>
+              <table className="w-full text-left"><thead className="bg-slate-100 text-xs font-bold text-slate-600 border-b border-slate-200"><tr><th className="p-4">來源檔案名稱</th><th className="p-4 text-center">筆數</th><th className="p-4 text-right">操作</th></tr></thead>
+                  <tbody className="divide-y divide-slate-100">{sourceStats.map((stat) => (<tr key={stat.source} className="hover:bg-red-50 group transition-colors"><td className="p-4 font-mono text-sm font-bold text-slate-700">{stat.source}</td><td className="p-4 text-center"><span className="bg-slate-100 px-3 py-1 rounded-full text-xs font-black text-slate-600">{stat.count}</span></td><td className="p-4 text-right"><button onClick={() => deleteBatchBySource(stat.source)} className="text-slate-400 hover:text-red-600 font-bold text-sm flex items-center gap-1 ml-auto transition-colors px-3 py-1 rounded hover:bg-red-100"><Trash2 className="w-4 h-4" /> 刪除整批</button></td></tr>))}</tbody></table>
           </div>
       </div>
     );
@@ -891,75 +770,27 @@ const App = () => {
   const TrackingTableView = () => (
     <div className="p-6 animate-in fade-in duration-500 min-h-screen bg-white">
       <div className="mb-6 flex justify-between items-center print:hidden">
-        <div>
-            <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2"><FileSpreadsheet className="w-6 h-6 text-emerald-600" /> 客戶訂單進度總表</h2>
-            <div className="flex flex-wrap gap-2 mt-2">{['ALL', ...sortedClients].map(c => (<button key={c} onClick={() => setActiveMasterClient(c)} className={`px-3 py-1 rounded border text-xs font-bold ${activeMasterClient === c ? 'bg-slate-900 text-white' : 'bg-white text-slate-500'}`}>{c}</button>))}</div>
-        </div>
-        <div className="flex gap-2">
-            <div className="relative"><Search className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" /><input type="text" placeholder="搜尋..." className="pl-8 pr-4 py-2 border rounded-lg text-sm w-48" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
-            <button onClick={exportTrackingCSV} className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"><Download className="w-4 h-4" /> 匯出</button>
-        </div>
+        <div><h2 className="text-2xl font-black text-slate-800 flex items-center gap-2"><FileSpreadsheet className="w-6 h-6 text-emerald-600" /> 客戶訂單進度總表</h2><div className="flex flex-wrap gap-2 mt-2">{['ALL', ...sortedClients].map(c => (<button key={c} onClick={() => setActiveMasterClient(c)} className={`px-3 py-1 rounded border text-xs font-bold ${activeMasterClient === c ? 'bg-slate-900 text-white' : 'bg-white text-slate-500'}`}>{c}</button>))}</div></div>
+        <div className="flex gap-2"><div className="relative"><Search className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" /><input type="text" placeholder="搜尋..." className="pl-8 pr-4 py-2 border rounded-lg text-sm w-48" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div><button onClick={exportTrackingCSV} className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"><Download className="w-4 h-4" /> 匯出</button></div>
       </div>
-      <div className="border border-slate-300 overflow-auto">
-        <table className="w-full text-left text-sm border-collapse">
-          <thead className="bg-slate-100 sticky top-0 z-10 text-xs font-black text-slate-600 uppercase tracking-wider">
-            <tr><th className="p-2 border-b border-r w-24">日期</th><th className="p-2 border-b border-r w-24">訂單</th><th className="p-2 border-b border-r w-20">廠商</th><th className="p-2 border-b border-r">品名</th><th className="p-2 border-b border-r w-32">顏色</th><th className="p-2 border-b border-r w-20 text-right">訂單數</th><th className="p-2 border-b border-r w-20 text-right">出貨</th><th className="p-2 border-b border-r w-20 text-right">未出貨</th><th className="p-2 border-b border-r w-20 text-center">櫃號</th><th className="p-2 border-b w-16 text-center">結案</th></tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200">
-            {filteredMasterData.map((d, i) => (
-              <tr key={d.id} className={`hover:bg-blue-50 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>
-                <td className="p-2 border-r">{d.date}</td><td className="p-2 border-r font-bold">{d.orderNo}</td><td className="p-2 border-r text-xs">{d.vendor}</td><td className="p-2 border-r font-bold text-slate-800">{d.product}</td><td className="p-2 border-r text-xs">{d.color}</td><td className="p-2 border-r text-right font-mono">{d.orderQty}</td><td className="p-2 border-r text-right font-mono font-bold text-blue-600">{d.shippedQty}</td><td className="p-2 border-r text-right font-mono text-red-500 font-bold">{d.orderQty - d.shippedQty !== 0 ? d.orderQty - d.shippedQty : ''}</td><td className="p-2 border-r text-center text-xs">{d.cabinetNo}</td><td className="p-2 text-center font-bold text-xs">{d.status}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <div className="border border-slate-300 overflow-auto"><table className="w-full text-left text-sm border-collapse"><thead className="bg-slate-100 sticky top-0 z-10 text-xs font-black text-slate-600 uppercase tracking-wider"><tr><th className="p-2 border-b border-r w-24">日期</th><th className="p-2 border-b border-r w-24">訂單</th><th className="p-2 border-b border-r w-20">廠商</th><th className="p-2 border-b border-r">品名</th><th className="p-2 border-b border-r w-32">顏色</th><th className="p-2 border-b border-r w-20 text-right">訂單數</th><th className="p-2 border-b border-r w-20 text-right">出貨</th><th className="p-2 border-b border-r w-20 text-right">未出貨</th><th className="p-2 border-b border-r w-20 text-center">櫃號</th><th className="p-2 border-b w-16 text-center">結案</th></tr></thead><tbody className="divide-y divide-slate-200">{filteredMasterData.map((d, i) => (<tr key={d.id} className={`hover:bg-blue-50 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}><td className="p-2 border-r">{d.date}</td><td className="p-2 border-r font-bold">{d.orderNo}</td><td className="p-2 border-r text-xs">{d.vendor}</td><td className="p-2 border-r font-bold text-slate-800">{d.product}</td><td className="p-2 border-r text-xs">{d.color}</td><td className="p-2 border-r text-right font-mono">{d.orderQty}</td><td className="p-2 border-r text-right font-mono font-bold text-blue-600">{d.shippedQty}</td><td className="p-2 border-r text-right font-mono text-red-500 font-bold">{d.orderQty - d.shippedQty !== 0 ? d.orderQty - d.shippedQty : ''}</td><td className="p-2 border-r text-center text-xs">{d.cabinetNo}</td><td className="p-2 text-center font-bold text-xs">{d.status}</td></tr>))}</tbody></table></div>
     </div>
   );
 
   const MasterTableView = () => (
     <div className="p-6 animate-in fade-in duration-500 min-h-screen bg-slate-50">
-      <div className="mb-6 flex justify-between items-center bg-white p-4 rounded-xl shadow-sm">
-        <h2 className="text-xl font-black text-slate-800 flex items-center gap-2"><Edit3 className="w-5 h-5 text-blue-600" /> 年度明細編輯 (Master Data)</h2>
-        <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 w-4 h-4" /><input type="text" placeholder="搜尋..." className="pl-9 pr-4 py-2 border rounded-lg text-sm w-64" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
-      </div>
+      <div className="mb-6 flex justify-between items-center bg-white p-4 rounded-xl shadow-sm"><h2 className="text-xl font-black text-slate-800 flex items-center gap-2"><Edit3 className="w-5 h-5 text-blue-600" /> 年度明細編輯 (Master Data)</h2><div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 w-4 h-4" /><input type="text" placeholder="搜尋..." className="pl-9 pr-4 py-2 border rounded-lg text-sm w-64" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div></div>
       <div className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto max-h-[80vh]">
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-100 border-b border-slate-300 sticky top-0 z-10 text-xs font-bold text-slate-600">
-              <tr><th className="p-3">日期</th><th className="p-3">客戶</th><th className="p-3">品名 (編輯)</th><th className="p-3">顏色 (編輯)</th><th className="p-3 text-right">出貨量</th><th className="p-3 text-right">單價</th><th className="p-3">廠商 (編輯)</th><th className="p-3 text-center">操作</th></tr>
-            </thead>
+            <thead className="bg-slate-100 border-b border-slate-300 sticky top-0 z-10 text-xs font-bold text-slate-600"><tr><th className="p-3">日期</th><th className="p-3">客戶</th><th className="p-3">品名 (編輯)</th><th className="p-3">顏色 (編輯)</th><th className="p-3 text-right">出貨量</th><th className="p-3 text-right">單價</th><th className="p-3">廠商 (編輯)</th><th className="p-3 text-center">操作</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
               {filteredMasterData.map(d => (
                 <tr key={d.id} className={`hover:bg-blue-50 ${editingId === d.id ? 'bg-yellow-50' : ''}`}>
                   {editingId === d.id ? (
-                    <>
-                      <td className="p-2"><input className="border rounded p-1 w-full" defaultValue={d.date} onChange={e => handleEditChange('date', e.target.value)} /></td>
-                      <td className="p-2 font-bold">{d.client}</td>
-                      <td className="p-2"><input className="border rounded p-1 w-full font-bold" autoFocus defaultValue={d.product} onChange={e => handleEditChange('product', e.target.value)} /></td>
-                      <td className="p-2"><input className="border rounded p-1 w-full" defaultValue={d.color} onChange={e => handleEditChange('color', e.target.value)} /></td>
-                      <td className="p-2"><input className="border rounded p-1 w-full text-right" type="number" defaultValue={d.shippedQty} onChange={e => handleEditChange('shippedQty', parseFloat(e.target.value))} /></td>
-                      <td className="p-2"><input className="border rounded p-1 w-full text-right" type="number" defaultValue={d.price} onChange={e => handleEditChange('price', parseFloat(e.target.value))} /></td>
-                      <td className="p-2"><input className="border rounded p-1 w-full bg-yellow-100 font-bold text-blue-800" defaultValue={d.vendor} onChange={e => handleEditChange('vendor', e.target.value)} placeholder="廠商" /></td>
-                      <td className="p-2 text-center flex gap-1 justify-center">
-                        <button onClick={saveEdit} className="p-1 bg-green-500 text-white rounded"><CheckCircle2 className="w-4 h-4" /></button>
-                        <button onClick={() => setEditingId(null)} className="p-1 bg-slate-300 text-white rounded"><X className="w-4 h-4" /></button>
-                      </td>
-                    </>
+                    <><td className="p-2"><input className="border rounded p-1 w-full" defaultValue={d.date} onChange={e => handleEditChange('date', e.target.value)} /></td><td className="p-2 font-bold">{d.client}</td><td className="p-2"><input className="border rounded p-1 w-full font-bold" autoFocus defaultValue={d.product} onChange={e => handleEditChange('product', e.target.value)} /></td><td className="p-2"><input className="border rounded p-1 w-full" defaultValue={d.color} onChange={e => handleEditChange('color', e.target.value)} /></td><td className="p-2"><input className="border rounded p-1 w-full text-right" type="number" defaultValue={d.shippedQty} onChange={e => handleEditChange('shippedQty', parseFloat(e.target.value))} /></td><td className="p-2"><input className="border rounded p-1 w-full text-right" type="number" defaultValue={d.price} onChange={e => handleEditChange('price', parseFloat(e.target.value))} /></td><td className="p-2"><input className="border rounded p-1 w-full bg-yellow-100 font-bold text-blue-800" defaultValue={d.vendor} onChange={e => handleEditChange('vendor', e.target.value)} placeholder="廠商" /></td><td className="p-2 text-center flex gap-1 justify-center"><button onClick={saveEdit} className="p-1 bg-green-500 text-white rounded"><CheckCircle2 className="w-4 h-4" /></button><button onClick={() => setEditingId(null)} className="p-1 bg-slate-300 text-white rounded"><X className="w-4 h-4" /></button></td></>
                   ) : (
-                    <>
-                      <td className="p-3 text-slate-500">{d.date}</td>
-                      <td className="p-3 font-bold text-blue-600">{d.client}</td>
-                      <td className="p-3 font-bold text-slate-800">{d.product}</td>
-                      <td className="p-3 text-slate-600">{d.color}</td>
-                      <td className="p-3 text-right font-mono">{d.shippedQty}</td>
-                      <td className="p-3 text-right font-mono text-emerald-600">{d.price}</td>
-                      <td className="p-3 text-slate-400">{d.vendor}</td>
-                      <td className="p-3 text-center flex gap-2 justify-center">
-                        <button onClick={() => startEditing(d)} className="text-slate-300 hover:text-blue-500"><Edit3 className="w-4 h-4" /></button>
-                        <button onClick={() => handleDelete(d.id)} className="text-slate-300 hover:text-red-500"><Trash className="w-4 h-4" /></button>
-                      </td>
-                    </>
+                    <><td className="p-3 text-slate-500">{d.date}</td><td className="p-3 font-bold text-blue-600">{d.client}</td><td className="p-3 font-bold text-slate-800">{d.product}</td><td className="p-3 text-slate-600">{d.color}</td><td className="p-3 text-right font-mono">{d.shippedQty}</td><td className="p-3 text-right font-mono text-emerald-600">{d.price}</td><td className="p-3 text-slate-400">{d.vendor}</td><td className="p-3 text-center flex gap-2 justify-center"><button onClick={() => startEditing(d)} className="text-slate-300 hover:text-blue-500"><Edit3 className="w-4 h-4" /></button><button onClick={() => handleDelete(d.id)} className="text-slate-300 hover:text-red-500"><Trash className="w-4 h-4" /></button></td></>
                   )}
                 </tr>
               ))}
@@ -970,68 +801,40 @@ const App = () => {
     </div>
   );
 
+  const sortedClients = useMemo(() => [...new Set(masterData.map(d => d.client))].sort(), [masterData]);
+  const filteredMasterData = useMemo(() => {
+    let data = masterData;
+    if (activeMasterClient !== 'ALL') data = data.filter(d => d.client === activeMasterClient);
+    if (searchTerm) { const lowerTerm = searchTerm.toLowerCase(); data = data.filter(d => d.product.toLowerCase().includes(lowerTerm) || d.orderNo.toLowerCase().includes(lowerTerm) || d.vendor.includes(searchTerm)); }
+    return [...data].sort((a, b) => a.client !== b.client ? a.client.localeCompare(b.client) : new Date(a.date) - new Date(b.date));
+  }, [masterData, activeMasterClient, searchTerm]);
+
+  const groupedInvoices = useMemo(() => {
+    const result = {};
+    sortedClients.forEach(client => {
+      const clientRows = masterData.filter(d => d.client === client && d.shippedQty > 0);
+      const dates = [...new Set(clientRows.map(d => d.date))].sort((a, b) => new Date(a) - new Date(b));
+      const config = clientConfig[client] || { startNo: 1, prefix: client };
+      result[client] = dates.map((date, dIdx) => {
+        const items = clientRows.filter(r => r.date === date);
+        const cabinet = items[0]?.cabinetNo || `${config.prefix}#${config.startNo + dIdx}`;
+        return { id: `${client}-${date}`, date, cabinetNo: cabinet, client, items, total: items.reduce((s, i) => s + (i.shippedQty * i.price), 0) };
+      });
+    });
+    return result;
+  }, [masterData, clientConfig, sortedClients]);
+
   const InvoiceTemplate = ({ inv }) => (
     <div className="w-[210mm] bg-white p-[15mm] shadow-none min-h-[297mm] flex flex-col font-tnr text-black invoice-page">
-      {/* ... (Invoice Template Content same as before) ... */}
-      <div className="text-center mb-6 border-b-[3px] border-double border-black pb-4">
-        <h1 className="text-4xl font-bold mb-2 tracking-tight uppercase">EVERISE MATERIAL INT'L LTD</h1>
-        <div className="flex justify-center gap-6 text-sm font-bold text-black"><span>TEL: 886-2-2741-9113</span><span>FAX: 886-2-2727-9021</span></div>
-        <p className="text-sm underline font-bold text-black">E-MAIL: e.material2727@gmail.com</p>
-        <div className="inline-block border-[3px] border-black px-12 py-2 font-bold text-3xl tracking-[0.2em] mb-2 uppercase text-black mt-4">SHIPPING ADVICE</div>
-      </div>
-      <div className="grid grid-cols-2 mb-6 text-xl leading-relaxed items-end">
-        <div className="space-y-2">
-          <div className="flex items-end gap-2 border-b-2 border-black pb-1"><span className="w-16 font-bold text-sm text-black">TO:</span><span className="flex-1 font-bold uppercase text-2xl text-black">{inv.client}</span></div>
-          <div className="flex items-end gap-2 border-b-2 border-black pb-1"><span className="w-16 font-bold text-sm text-black">FAX:</span><span className="flex-1"></span></div>
-          <div className="flex items-end gap-2 border-b-2 border-black pb-1"><span className="w-16 font-bold text-sm text-black">ATTN:</span><span className="flex-1"></span></div>
-        </div>
-        <div className="space-y-2 pl-8">
-          <div className="flex items-end gap-2 border-b-2 border-black pb-1"><span className="w-20 font-bold text-sm text-black text-right">DATE:</span><span className="flex-1 font-bold text-xl">{inv.date}</span></div>
-          <div className="flex items-end gap-2 border-b-2 border-black pb-1"><span className="w-20 font-bold text-sm text-black text-right">C/NO:</span><span className="flex-1 font-bold text-3xl text-black">{inv.cabinetNo}</span></div>
-          <div className="flex items-end gap-2 border-b-2 border-black pb-1"><span className="w-20 font-bold text-sm text-black text-right">FROM:</span><span className="flex-1 font-bold text-xl text-center">ER</span></div>
-        </div>
-      </div>
-      <div className="flex-1">
-        <table className="w-full border-t-[4px] border-black">
-          <tbody className="divide-y-2 divide-black">
-            {inv.items.map((item, idx) => (
-              <React.Fragment key={idx}>
-                <tr><td colSpan="3" className="pt-6 pb-2"><div className="flex items-baseline gap-4"><span className="font-bold text-3xl leading-none text-black">ORDER "{item.product}"</span></div></td></tr>
-                <tr className="align-bottom">
-                  <td className="w-[35%] py-3 pl-6 text-xl text-black font-bold uppercase">{item.color}</td>
-                  <td className="py-3 px-2"><div className="flex items-baseline gap-2 text-lg whitespace-nowrap"><span className="font-bold text-2xl text-black">{item.shippedQty.toLocaleString()} Y</span><span className="mx-2 text-sm text-black">×</span><span className="font-bold text-xl text-black">{item.price.toFixed(2)}</span><span className="ml-4 font-bold text-xl text-black">= THB $</span></div></td>
-                  <td className="py-3 text-right font-bold text-3xl tabular-nums pr-2 text-black">{(item.shippedQty * item.price).toLocaleString()}</td>
-                </tr>
-              </React.Fragment>
-            ))}
-          </tbody>
-        </table>
-        <div className="mt-10 flex justify-end"><div className="w-full border-t-[6px] border-double border-black pt-6 flex justify-between items-baseline px-6 rounded-lg"><span className="font-bold text-2xl tracking-tighter uppercase text-black">Total:</span><span className="font-bold text-5xl tabular-nums text-black tracking-tighter">THB {Math.round(inv.total).toLocaleString()}</span></div></div>
-      </div>
+      <div className="text-center mb-6 border-b-[3px] border-double border-black pb-4"><h1 className="text-4xl font-bold mb-2 tracking-tight uppercase">EVERISE MATERIAL INT'L LTD</h1><div className="flex justify-center gap-6 text-sm font-bold text-black"><span>TEL: 886-2-2741-9113</span><span>FAX: 886-2-2727-9021</span></div><p className="text-sm underline font-bold text-black">E-MAIL: e.material2727@gmail.com</p><div className="inline-block border-[3px] border-black px-12 py-2 font-bold text-3xl tracking-[0.2em] mb-2 uppercase text-black mt-4">SHIPPING ADVICE</div></div>
+      <div className="grid grid-cols-2 mb-6 text-xl leading-relaxed items-end"><div className="space-y-2"><div className="flex items-end gap-2 border-b-2 border-black pb-1"><span className="w-16 font-bold text-sm text-black">TO:</span><span className="flex-1 font-bold uppercase text-2xl text-black">{inv.client}</span></div><div className="flex items-end gap-2 border-b-2 border-black pb-1"><span className="w-16 font-bold text-sm text-black">FAX:</span><span className="flex-1"></span></div><div className="flex items-end gap-2 border-b-2 border-black pb-1"><span className="w-16 font-bold text-sm text-black">ATTN:</span><span className="flex-1"></span></div></div><div className="space-y-2 pl-8"><div className="flex items-end gap-2 border-b-2 border-black pb-1"><span className="w-20 font-bold text-sm text-black text-right">DATE:</span><span className="flex-1 font-bold text-xl">{inv.date}</span></div><div className="flex items-end gap-2 border-b-2 border-black pb-1"><span className="w-20 font-bold text-sm text-black text-right">C/NO:</span><span className="flex-1 font-bold text-3xl text-black">{inv.cabinetNo}</span></div><div className="flex items-end gap-2 border-b-2 border-black pb-1"><span className="w-20 font-bold text-sm text-black text-right">FROM:</span><span className="flex-1 font-bold text-xl text-center">ER</span></div></div></div>
+      <div className="flex-1"><table className="w-full border-t-[4px] border-black"><tbody className="divide-y-2 divide-black">{inv.items.map((item, idx) => (<React.Fragment key={idx}><tr><td colSpan="3" className="pt-6 pb-2"><div className="flex items-baseline gap-4"><span className="font-bold text-3xl leading-none text-black">ORDER "{item.product}"</span></div></td></tr><tr className="align-bottom"><td className="w-[35%] py-3 pl-6 text-xl text-black font-bold uppercase">{item.color}</td><td className="py-3 px-2"><div className="flex items-baseline gap-2 text-lg whitespace-nowrap"><span className="font-bold text-2xl text-black">{item.shippedQty.toLocaleString()} Y</span><span className="mx-2 text-sm text-black">×</span><span className="font-bold text-xl text-black">{item.price.toFixed(2)}</span><span className="ml-4 font-bold text-xl text-black">= THB $</span></div></td><td className="py-3 text-right font-bold text-3xl tabular-nums pr-2 text-black">{(item.shippedQty * item.price).toLocaleString()}</td></tr></React.Fragment>))}</tbody></table><div className="mt-10 flex justify-end"><div className="w-full border-t-[6px] border-double border-black pt-6 flex justify-between items-baseline px-6 rounded-lg"><span className="font-bold text-2xl tracking-tighter uppercase text-black">Total:</span><span className="font-bold text-5xl tabular-nums text-black tracking-tighter">THB {Math.round(inv.total).toLocaleString()}</span></div></div></div>
     </div>
   );
 
   const Dashboard = () => (
     <div className="max-w-7xl mx-auto p-12 min-h-screen bg-slate-50">
-      {sortedClients.length === 0 ? <div className="text-center py-40 border-4 border-dashed border-slate-200 rounded-3xl"><LayoutDashboard className="w-20 h-20 text-slate-300 mx-auto mb-4" /><p className="text-slate-400 font-bold text-xl">請先匯入 CSV 資料</p></div> : 
-        sortedClients.map(client => (
-          <div key={client} className="mb-20">
-            <div className="flex justify-between items-center mb-8 border-b-2 border-slate-200 pb-4">
-              <div className="flex items-center gap-4"><span className="bg-slate-900 text-white px-6 py-2 rounded-xl font-black text-3xl shadow-lg">{client}</span><h2 className="text-xl font-bold text-slate-400">請款單列表</h2></div>
-              <button onClick={() => { setActiveClient(client); setViewMode('printAll'); }} className="bg-emerald-600 text-white px-5 py-2 rounded-lg font-bold flex items-center gap-2 shadow-md hover:bg-emerald-700"><Layers className="w-4 h-4" /> 列印本區所有 SA (Print All)</button>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {groupedInvoices[client].map(inv => (
-                <div key={inv.id} onClick={() => { setActiveClient(client); setSelectedInvoiceId(inv.id); setViewMode('preview'); }} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer group">
-                  <div className="flex justify-between items-start mb-4"><span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-md text-xs font-black">{inv.cabinetNo}</span><ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-600" /></div>
-                  <div className="text-2xl font-black text-slate-800 mb-1">{inv.date}</div><div className="text-xs text-slate-400 font-bold">{inv.items.length} 筆明細</div>
-                  <div className="mt-6 pt-4 border-t border-slate-100 text-right"><span className="text-2xl font-black text-emerald-600">THB {Math.round(inv.total).toLocaleString()}</span></div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))
-      }
+      {sortedClients.length === 0 ? <div className="text-center py-40 border-4 border-dashed border-slate-200 rounded-3xl"><LayoutDashboard className="w-20 h-20 text-slate-300 mx-auto mb-4" /><p className="text-slate-400 font-bold text-xl">請先匯入 CSV 資料</p></div> : sortedClients.map(client => (<div key={client} className="mb-20"><div className="flex justify-between items-center mb-8 border-b-2 border-slate-200 pb-4"><div className="flex items-center gap-4"><span className="bg-slate-900 text-white px-6 py-2 rounded-xl font-black text-3xl shadow-lg">{client}</span><h2 className="text-xl font-bold text-slate-400">請款單列表</h2></div><button onClick={() => { setActiveClient(client); setViewMode('printAll'); }} className="bg-emerald-600 text-white px-5 py-2 rounded-lg font-bold flex items-center gap-2 shadow-md hover:bg-emerald-700"><Layers className="w-4 h-4" /> 列印本區所有 SA (Print All)</button></div><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">{groupedInvoices[client].map(inv => (<div key={inv.id} onClick={() => { setActiveClient(client); setSelectedInvoiceId(inv.id); setViewMode('preview'); }} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer group"><div className="flex justify-between items-start mb-4"><span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-md text-xs font-black">{inv.cabinetNo}</span><ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-600" /></div><div className="text-2xl font-black text-slate-800 mb-1">{inv.date}</div><div className="text-xs text-slate-400 font-bold">{inv.items.length} 筆明細</div><div className="mt-6 pt-4 border-t border-slate-100 text-right"><span className="text-2xl font-black text-emerald-600">THB {Math.round(inv.total).toLocaleString()}</span></div></div>))}</div></div>))}
     </div>
   );
 
@@ -1057,14 +860,37 @@ const App = () => {
     <div className="max-w-2xl mx-auto p-12">
       <button onClick={() => setViewMode('dashboard')} className="flex items-center gap-3 text-slate-500 mb-8 font-bold"><ArrowLeft className="w-5 h-5" /> 返回</button>
       <div className="grid gap-6">
+        {/* API Key */}
         <div className="bg-white rounded-2xl shadow-lg p-10 border border-slate-200">
            <h3 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2"><KeyRound className="w-6 h-6 text-purple-600" /> Google Gemini API 設定</h3>
            <input type="password" className="w-full border rounded-lg px-4 py-3 mb-4 bg-slate-50 font-mono text-sm" placeholder="貼上您的 API Key (例如：AIzaSy...)" value={userApiKey} onChange={(e) => handleSaveApiKey(e.target.value)} />
            <div className="text-xs text-slate-400">Key 將自動儲存於您的瀏覽器 (Local Storage)。</div>
         </div>
-        <div className="bg-white rounded-2xl shadow-lg p-10 border border-slate-200 text-center">
-          <Hash className="w-12 h-12 text-blue-500 mx-auto mb-4" /><h3 className="text-xl font-black text-slate-800 mb-6">匯入櫃號對照表 (Legacy)</h3><p className="text-slate-400 mb-6">新版系統已支援自動櫃號編碼，此功能僅供備用。</p>
-          <label className="block w-full py-12 border-2 border-dashed border-blue-200 rounded-xl text-blue-600 font-bold hover:bg-blue-50 transition-all cursor-pointer"><Upload className="w-8 h-8 mx-auto mb-2" /> 點此選擇 CSV<input type="file" accept=".csv" className="hidden" onChange={(e) => handleFileUpload(e)} /></label>
+
+        {/* New: Cabinet Number Manager */}
+        <div className="bg-white rounded-2xl shadow-lg p-10 border border-slate-200">
+           <h3 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2"><Hash className="w-6 h-6 text-blue-600" /> 櫃號起始值管理 (Fix Cabinet No)</h3>
+           <p className="text-slate-500 mb-4 text-sm">如果系統自動帶入的櫃號不正確，請在此手動修正「起始號碼」。</p>
+           <div className="space-y-4">
+               {sortedClients.map(client => (
+                   <div key={client} className="flex items-center gap-4 border-b border-slate-100 pb-4 last:border-0">
+                       <span className="font-bold w-20">{client}</span>
+                       <div className="flex-1 flex gap-2 items-center">
+                           <span className="text-xs text-slate-400">Prefix:</span>
+                           <input type="text" className="border rounded px-2 py-1 w-20 text-sm font-bold" value={clientConfig[client]?.prefix || client} onChange={(e) => handleClientConfigChange(client, 'prefix', e.target.value)} />
+                           <span className="text-xs text-slate-400 ml-2">Start No:</span>
+                           <input type="number" className="border rounded px-2 py-1 w-24 text-sm font-bold font-mono" value={clientConfig[client]?.startNo || 1} onChange={(e) => handleClientConfigChange(client, 'startNo', parseInt(e.target.value))} />
+                       </div>
+                   </div>
+               ))}
+               {sortedClients.length === 0 && <p className="text-slate-400 text-sm">請先匯入訂單資料以管理客戶櫃號。</p>}
+           </div>
+        </div>
+
+        {/* Legacy Upload */}
+        <div className="bg-white rounded-2xl shadow-lg p-10 border border-slate-200 text-center opacity-50 hover:opacity-100 transition-opacity">
+          <h3 className="text-lg font-black text-slate-800 mb-2">批次匯入櫃號設定 (進階)</h3>
+          <label className="block w-full py-4 border-2 border-dashed border-blue-200 rounded-xl text-blue-600 font-bold hover:bg-blue-50 transition-all cursor-pointer"><Upload className="w-4 h-4 mx-auto mb-1" /> 上傳 CSV<input type="file" accept=".csv" className="hidden" onChange={(e) => handleFileUpload(e)} /></label>
         </div>
       </div>
     </div>
@@ -1075,7 +901,7 @@ const App = () => {
       <Navbar />
       <AiModal show={showAiModal} onClose={() => setShowAiModal(false)} prompt={aiPrompt} setPrompt={setAiPrompt} onSend={callGemini} response={aiResponse} loading={isAiLoading} hasKey={!!userApiKey || !!apiKey} />
       <ManualRevenueModal show={showRevenueModal} onClose={() => setShowRevenueModal(false)} onSave={() => {}} />
-      <Toast message={toast.message} onUndo={toast.undoAction} visible={toast.visible} />
+      <PersistentUndoBar message={toast.message} onUndo={toast.undoAction} onDismiss={dismissToast} visible={toast.visible} />
       <main className="pb-40">
         {viewMode === 'dashboard' && <Dashboard />}
         {viewMode === 'masterTable' && <MasterTableView />}
@@ -1088,6 +914,7 @@ const App = () => {
       </main>
       <style dangerouslySetInnerHTML={{ __html: `
         @media print {
+          @page { size: A4; margin: 10mm; }
           body * { visibility: hidden; }
           #print-area, #print-area * { visibility: visible; }
           #print-area { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; }
@@ -1098,7 +925,6 @@ const App = () => {
           .print\\:p-0 { padding: 0 !important; }
           .print\\:w-full { width: 100% !important; max-width: none !important; }
           .print\\:block { display: block !important; }
-          @page { size: A4; margin: 10mm; }
         }
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&family=JetBrains+Mono:wght@700;800&display=swap');
         .font-mono { font-family: 'JetBrains Mono', monospace; }
