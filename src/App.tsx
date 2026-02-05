@@ -69,7 +69,7 @@ const AiModal = ({ show, onClose, prompt, setPrompt, onSend, response, loading }
 
 const App = () => {
   // --- Gemini API Key ---
-  const apiKey = "";
+  const apiKey = "AIzaSyAxuPefSSv7M2iJKtE-rXkx1m3mJIhe9oY";
 
   // --- Firebase Init ---
   const [user, setUser] = useState(null);
