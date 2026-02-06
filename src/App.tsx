@@ -116,7 +116,7 @@ const AiModal = ({ show, onClose, prompt, setPrompt, onSend, response, loading, 
   );
 };
 
-// --- Manual Revenue Modal ---
+// --- Manual Revenue Modal (中國/額外營收輸入) ---
 const ManualRevenueModal = ({ show, onClose, onSave }) => {
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [client, setClient] = useState('');
@@ -350,7 +350,6 @@ const App = () => {
         
         // 判斷是否為設定檔
         if (headers.includes('client') && headers.includes('number')) {
-            // ... (如果需要讀取設定檔的邏輯保留，但主要依賴 CSV Defaults)
              const newConfig = { ...clientConfig };
              rows.slice(1).forEach(r => {
                  const [c, n] = r.split(',');
@@ -409,6 +408,21 @@ const App = () => {
       };
       reader.readAsText(file);
     });
+  };
+
+  // --- CSV Export for Tracking Table ---
+  const exportTrackingCSV = () => {
+    const headers = ["下單日期", "訂單", "廠商", "品名", "顏色", "訂單數量", "實際出貨", "未出貨", "櫃號", "結案", "備註"];
+    const csvRows = [headers.join(",")];
+    filteredMasterData.forEach(d => {
+      const row = [d.date, d.orderNo, d.vendor, `"${d.product}"`, d.color, d.orderQty, d.shippedQty, d.orderQty - d.shippedQty, d.cabinetNo, d.status, `"${d.note}"`];
+      csvRows.push(row.join(","));
+    });
+    const blob = new Blob(["\uFEFF" + csvRows.join("\n")], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `訂單進度總表_${activeMasterClient}_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
   };
 
   // --- Revenue Logic ---
@@ -506,6 +520,66 @@ const App = () => {
           <Upload className="w-4 h-4" /> 匯入 CSV
           <input type="file" accept=".csv" multiple className="hidden" onChange={handleFileUpload} />
         </label>
+      </div>
+    </div>
+  );
+
+  // --- 修正版：補回 TrackingTableView ---
+  const TrackingTableView = () => (
+    <div className="p-6 animate-in fade-in duration-500 min-h-screen bg-white">
+      <div className="mb-6 flex justify-between items-center print:hidden">
+        <div>
+          <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2">
+            <FileSpreadsheet className="w-6 h-6 text-emerald-600" /> 客戶訂單總表
+          </h2>
+          <div className="flex flex-wrap gap-2 mt-2">
+            {['ALL', ...sortedClients].map(c => (
+              <button key={c} onClick={() => setActiveMasterClient(c)} className={`px-3 py-1 rounded border text-xs font-bold ${activeMasterClient === c ? 'bg-slate-900 text-white' : 'bg-white text-slate-500'}`}>{c}</button>
+            ))}
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+            <input type="text" placeholder="搜尋..." className="pl-8 pr-4 py-2 border rounded-lg text-sm w-48" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          </div>
+          <button onClick={exportTrackingCSV} className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"><Download className="w-4 h-4" /> 匯出</button>
+          <button onClick={() => window.print()} className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"><Printer className="w-4 h-4" /> 列印</button>
+        </div>
+      </div>
+      <div className="border border-slate-300 overflow-auto max-h-[80vh]">
+        <table className="w-full text-left text-sm border-collapse">
+          <thead className="bg-slate-100 sticky top-0 z-10 text-xs font-black text-slate-600 uppercase tracking-wider">
+            <tr>
+              <th className="p-2 border-b border-r border-slate-300 w-24">下單日期</th>
+              <th className="p-2 border-b border-r border-slate-300 w-24">訂單</th>
+              <th className="p-2 border-b border-r border-slate-300 w-20">廠商</th>
+              <th className="p-2 border-b border-r border-slate-300">品名規格</th>
+              <th className="p-2 border-b border-r border-slate-300 w-32">顏色</th>
+              <th className="p-2 border-b border-r border-slate-300 w-20 text-right">訂單數</th>
+              <th className="p-2 border-b border-r border-slate-300 w-20 text-right">實際出貨</th>
+              <th className="p-2 border-b border-r border-slate-300 w-20 text-right">未出貨</th>
+              <th className="p-2 border-b border-r border-slate-300 w-20 text-center">櫃號</th>
+              <th className="p-2 border-b border-slate-300 w-16 text-center">結案</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200">
+            {filteredMasterData.map((d, i) => (
+              <tr key={d.id} className={`hover:bg-blue-50 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>
+                <td className="p-2 border-r border-slate-200">{d.date}</td>
+                <td className="p-2 border-r border-slate-200 font-bold">{d.orderNo}</td>
+                <td className="p-2 border-r border-slate-200 text-xs">{d.vendor}</td>
+                <td className="p-2 border-r border-slate-200 font-bold text-slate-800">{d.product}</td>
+                <td className="p-2 border-r border-slate-200 text-xs">{d.color}</td>
+                <td className="p-2 border-r border-slate-200 text-right font-mono">{d.orderQty}</td>
+                <td className="p-2 border-r border-slate-200 text-right font-mono font-bold text-blue-600">{d.shippedQty}</td>
+                <td className="p-2 border-r border-slate-200 text-right font-mono text-red-500 font-bold">{d.orderQty - d.shippedQty !== 0 ? d.orderQty - d.shippedQty : ''}</td>
+                <td className="p-2 border-r border-slate-200 text-center text-xs">{d.cabinetNo}</td>
+                <td className="p-2 text-center font-bold text-xs">{d.status}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -757,6 +831,8 @@ const App = () => {
       
       <main className="p-6">
         {viewMode === 'dashboard' && <Dashboard />}
+
+        {viewMode === 'trackingTable' && <TrackingTableView />}
 
         {viewMode === 'revenueStats' && (
             <div className="max-w-6xl mx-auto space-y-6">
