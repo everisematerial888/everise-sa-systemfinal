@@ -32,7 +32,7 @@ const firebaseConfig = {
 
 const apiKeyDefault = ""; 
 
-// --- 預設的客戶櫃號設定 (基於您上傳的 CSV，已自動 +1) ---
+// --- 預設的客戶櫃號設定 ---
 const DEFAULT_CLIENT_CONFIG = {
   "AP": { startNo: 955, prefix: "AP" },
   "APS": { startNo: 858, prefix: "APS" },
@@ -116,7 +116,7 @@ const AiModal = ({ show, onClose, prompt, setPrompt, onSend, response, loading, 
   );
 };
 
-// --- Manual Revenue Modal (中國/額外營收輸入) ---
+// --- Manual Revenue Modal ---
 const ManualRevenueModal = ({ show, onClose, onSave }) => {
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [client, setClient] = useState('');
@@ -225,7 +225,6 @@ const App = () => {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [showRevenueModal, setShowRevenueModal] = useState(false); 
 
-  // 預設使用上方定義的 DEFAULT_CLIENT_CONFIG
   const [clientConfig, setClientConfig] = useState(DEFAULT_CLIENT_CONFIG);
 
   const [vendorRules] = useState([
@@ -310,7 +309,6 @@ const App = () => {
     }
   };
 
-  // --- Helper Functions ---
   const cleanNumber = (str) => {
     if (!str) return 0;
     const match = str.toString().replace(/[^\d.-]/g, '');
@@ -348,7 +346,6 @@ const App = () => {
         if (rows.length < 1) return;
         const headers = rows[0].split(',').map(h => h.trim().toLowerCase());
         
-        // 判斷是否為設定檔
         if (headers.includes('client') && headers.includes('number')) {
              const newConfig = { ...clientConfig };
              rows.slice(1).forEach(r => {
@@ -359,7 +356,6 @@ const App = () => {
              return;
         }
 
-        // 解析訂單數據
         const getIdx = (keys) => headers.findIndex(h => keys.some(k => h.includes(k)));
         const idx = {
             date: getIdx(['date', '日期']), client: getIdx(['client', '客戶']),
@@ -370,7 +366,6 @@ const App = () => {
         };
 
         const promises = rows.slice(1).map((row, rIdx) => {
-            // 處理 CSV 內的引號
             const cols = [];
             let cur = '';
             let inQuote = false;
@@ -524,7 +519,6 @@ const App = () => {
     </div>
   );
 
-  // --- 修正版：補回 TrackingTableView ---
   const TrackingTableView = () => (
     <div className="p-6 animate-in fade-in duration-500 min-h-screen bg-white">
       <div className="mb-6 flex justify-between items-center print:hidden">
@@ -584,7 +578,6 @@ const App = () => {
     </div>
   );
 
-  // --- 修正版：加入「櫃號」編輯功能的 MasterTableView ---
   const MasterTableView = () => (
     <div className="p-6 animate-in fade-in duration-500 min-h-screen bg-slate-50">
       <div className="mb-6 flex justify-between items-center bg-white p-4 rounded-xl shadow-sm">
@@ -653,7 +646,6 @@ const App = () => {
     </div>
   );
 
-  // --- 修正版：加入「櫃號記憶與推進」功能的 Dashboard ---
   const Dashboard = () => {
     const updateStartNo = async (client, currentStart, count) => {
         const nextStart = currentStart + count;
@@ -762,7 +754,6 @@ const App = () => {
     );
   };
 
-  // --- 修正版：字體縮小、版面更緊湊的 InvoiceTemplate ---
   const InvoiceTemplate = ({ inv }) => (
     <div className="w-[210mm] bg-white p-[10mm] min-h-[297mm] flex flex-col font-tnr text-black invoice-page mx-auto">
       <div className="text-center mb-4 border-b-[2px] border-double border-black pb-2">
@@ -840,23 +831,122 @@ const App = () => {
                     <h2 className="text-3xl font-black">年度營業額統計</h2>
                     <button onClick={() => setShowRevenueModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"><Plus className="w-4 h-4"/>新增營收</button>
                 </div>
-                {revenueData.map(r => (
-                    <div key={r.monthKey} className="bg-white p-6 rounded-2xl shadow-sm border grid grid-cols-1 md:grid-cols-4 gap-6">
-                        <div>
-                            <div className="text-slate-400 font-bold">{r.year}</div>
-                            <div className="text-4xl font-black">{r.month} 月</div>
-                            <div className="text-emerald-600 font-black text-xl mt-2">THB {r.total.toLocaleString()}</div>
-                        </div>
-                        <div className="md:col-span-3 grid grid-cols-2 sm:grid-cols-4 gap-4">
-                            {r.clients.map(c => (
-                                <div key={c.client} className="bg-slate-50 p-3 rounded-lg border">
-                                    <div className="text-xs font-bold text-slate-500 truncate">{c.client}</div>
-                                    <div className="font-bold text-emerald-600">{c.amount.toLocaleString()}</div>
+                
+                {/* 營收統計卡片區 */}
+                {revenueData.map((data) => (
+                    <div key={data.monthKey} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
+                        <div className="p-6 flex flex-col md:flex-row gap-6 items-start">
+                            <div className="w-full md:w-48 shrink-0 border-b md:border-b-0 md:border-r border-slate-100 pb-4 md:pb-0 md:pr-4">
+                                <div className="text-sm font-bold text-slate-400 uppercase tracking-wider">{data.year}</div>
+                                <div className="text-4xl font-black text-slate-800">{data.month} <span className="text-lg text-slate-400">月</span></div>
+                                <div className="mt-2 text-xl font-black text-emerald-600 flex items-center gap-1">
+                                    <span className="text-xs text-emerald-400">THB</span>
+                                    {data.total.toLocaleString()}
                                 </div>
-                            ))}
+                                <div className="mt-4 h-2 bg-slate-100 rounded-full overflow-hidden w-full">
+                                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `100%` }}></div>
+                                </div>
+                                
+                                <div className="mt-4 space-y-2 border-t border-slate-100 pt-2">
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="text-slate-400 font-bold flex items-center gap-1"><Package className="w-3 h-3" /> 倉庫</span>
+                                        <span className="font-mono font-bold text-blue-600">{data.warehouseTotal.toLocaleString()}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="text-slate-400 font-bold flex items-center gap-1"><MapPin className="w-3 h-3" /> 中國</span>
+                                        <span className="font-mono font-bold text-red-500">{data.chinaTotal.toLocaleString()}</span>
+                                    </div>
+                                    {data.otherTotal > 0 && (
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="text-slate-400 font-bold flex items-center gap-1"><Hash className="w-3 h-3" /> 其他</span>
+                                            <span className="font-mono font-bold text-yellow-600">{data.otherTotal.toLocaleString()}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="flex-1 w-full">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                                    {data.clients.map((client, idx) => (
+                                        <div key={idx} className="flex flex-col bg-slate-50 p-2 rounded border border-slate-100 relative group">
+                                            <div className="flex justify-between items-baseline mb-1">
+                                                <span className="text-xs font-black text-slate-700 truncate">{idx + 1}. {client.client}</span>
+                                            </div>
+                                            <span className="text-sm font-mono text-emerald-600 font-bold block">{client.amount.toLocaleString()}</span>
+                                            
+                                            <div className="mt-1 flex h-1.5 w-full rounded-full overflow-hidden bg-slate-200">
+                                                {client.sources['Warehouse'] > 0 && (
+                                                    <div className="h-full bg-blue-400" style={{ width: `${(client.sources['Warehouse'] / client.amount) * 100}%` }} title={`Warehouse: ${client.sources['Warehouse'].toLocaleString()}`}></div>
+                                                )}
+                                                {client.sources['China'] > 0 && (
+                                                    <div className="h-full bg-red-400" style={{ width: `${(client.sources['China'] / client.amount) * 100}%` }} title={`China: ${client.sources['China'].toLocaleString()}`}></div>
+                                                )}
+                                                {client.sources['Other'] > 0 && (
+                                                    <div className="h-full bg-yellow-400" style={{ width: `${(client.sources['Other'] / client.amount) * 100}%` }} title={`Other: ${client.sources['Other'].toLocaleString()}`}></div>
+                                                )}
+                                            </div>
+
+                                            <div className="mt-1 text-[10px] text-slate-400 flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity absolute top-full left-0 bg-white p-2 shadow-xl z-10 w-40 border rounded pointer-events-none">
+                                                 {client.sources['Warehouse'] > 0 && <span className="flex justify-between"><span>📦 倉庫</span> <span>{client.sources['Warehouse'].toLocaleString()}</span></span>}
+                                                 {client.sources['China'] > 0 && <span className="flex justify-between text-red-400 font-bold"><span>🇨🇳 中國</span> <span>{client.sources['China'].toLocaleString()}</span></span>}
+                                                 {client.sources['Other'] > 0 && <span className="flex justify-between text-yellow-600"><span>🔸 其他</span> <span>{client.sources['Other'].toLocaleString()}</span></span>}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 ))}
+                
+                {/* 手動輸入紀錄明細表格 (您要求的流水帳) */}
+                <div className="mt-12 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h3 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
+                        <Edit3 className="w-5 h-5 text-blue-500" /> 手動輸入紀錄明細 (Manual Entries)
+                    </h3>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-slate-50 text-xs text-slate-500 font-bold border-b border-slate-100">
+                                <tr>
+                                    <th className="p-3">日期</th>
+                                    <th className="p-3">客戶</th>
+                                    <th className="p-3">櫃號</th>
+                                    <th className="p-3">來源</th>
+                                    <th className="p-3 text-right">金額 (THB)</th>
+                                    <th className="p-3">備註</th>
+                                    <th className="p-3 text-center">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {manualRevenueData.sort((a,b) => new Date(b.date) - new Date(a.date)).map(item => (
+                                    <tr key={item.id} className="hover:bg-slate-50">
+                                        <td className="p-3 font-mono text-slate-600">{item.date}</td>
+                                        <td className="p-3 font-bold text-slate-800">{item.client}</td>
+                                        <td className="p-3 text-slate-600"><span className="bg-slate-100 px-2 py-0.5 rounded text-xs">{item.cabinetNo || '-'}</span></td>
+                                        <td className="p-3">
+                                            {item.source === 'China' ? (
+                                                <span className="flex items-center gap-1 text-red-500 font-bold text-xs"><MapPin className="w-3 h-3" /> China</span>
+                                            ) : item.source === 'Warehouse' ? (
+                                                <span className="flex items-center gap-1 text-blue-500 font-bold text-xs"><Package className="w-3 h-3" /> Warehouse</span>
+                                            ) : (
+                                                <span className="text-slate-400 text-xs">{item.source || 'China'}</span>
+                                            )}
+                                        </td>
+                                        <td className="p-3 text-right font-mono text-emerald-600 font-bold">{item.amount.toLocaleString()}</td>
+                                        <td className="p-3 text-slate-400 text-xs">{item.note}</td>
+                                        <td className="p-3 text-center">
+                                            <button onClick={() => deleteManualRevenue(item.id)} className="text-red-300 hover:text-red-600 p-1 rounded hover:bg-red-50 transition-colors">
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {manualRevenueData.length === 0 && (
+                                    <tr><td colSpan="7" className="p-8 text-center text-slate-400">目前沒有手動輸入的紀錄</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         )}
 
