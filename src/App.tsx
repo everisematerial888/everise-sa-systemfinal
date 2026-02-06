@@ -29,7 +29,6 @@ const firebaseConfig = {
   appId: "1:736271192466:web:1517c3d40e3e61d1c1b14b",
   measurementId: "G-1X3X3FWSM7"
 };
-
 const apiKeyDefault = ""; 
 
 // --- 預設的客戶櫃號設定 ---
@@ -338,7 +337,7 @@ const App = () => {
       }
   }
 
-  // --- CSV Import Logic (Auto Detect Origin) ---
+  // --- CSV Import Logic (Auto Detect Origin by Filename) ---
   const handleFileUpload = (e) => {
     const files = Array.from(e.target.files);
     files.forEach(file => {
@@ -406,7 +405,7 @@ const App = () => {
                 status: cols[idx.status] || '',
                 note: cols[idx.note] || '',
                 source: file.name,
-                origin: origin, // 自動標記產地
+                origin: origin, // 自動標記產地 (根據檔名)
                 timestamp: Date.now()
             });
         });
@@ -444,14 +443,24 @@ const App = () => {
         const m = stats[key];
         m.total += amount;
         
-        // 修正邏輯：根據 source (origin) 進行歸類
-        if (source === 'Warehouse' || source === 'ER') m.warehouseTotal += amount;
-        else if (source === 'China') m.chinaTotal += amount;
-        else m.otherTotal += amount;
+        // 修正邏輯：根據 source (origin) 進行歸類 (Case Insensitive check)
+        const srcLower = (source || '').toLowerCase();
+        if (srcLower === 'china') {
+            m.chinaTotal += amount;
+        } else if (srcLower === 'warehouse' || srcLower === 'er') {
+            m.warehouseTotal += amount;
+        } else {
+            m.otherTotal += amount;
+        }
         
         if (!m.clientMap[client]) m.clientMap[client] = { total: 0, sources: {} };
         m.clientMap[client].total += amount;
-        const displaySource = (source === 'ER') ? 'Warehouse' : source;
+        
+        // Display Source Normalization
+        let displaySource = 'Other';
+        if (srcLower === 'china') displaySource = 'China';
+        else if (srcLower === 'warehouse' || srcLower === 'er') displaySource = 'Warehouse';
+        
         m.clientMap[client].sources[displaySource] = (m.clientMap[client].sources[displaySource] || 0) + amount;
     };
 
@@ -506,6 +515,7 @@ const App = () => {
         res[c] = dates.map((date, idx) => {
             const items = rows.filter(r => r.date === date);
             const conf = clientConfig[c] || { startNo: 1, prefix: c };
+            // 判斷整張單的產地 (通常同一天同一客戶會是同一產地，取第一筆即可)
             const origin = items[0]?.origin || 'ER'; 
             
             return { 
