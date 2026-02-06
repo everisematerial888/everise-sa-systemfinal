@@ -7,7 +7,7 @@ import {
   Download, Database, Layers, Sparkles, MessageSquare, Loader2,
   TrendingUp, DollarSign, Calendar, PieChart, BarChart3, Calculator,
   Cloud, CloudOff, Save, Archive, Plus, Trash2, MapPin, Package, KeyRound,
-  RefreshCw
+  RefreshCw, Plane, Warehouse
 } from 'lucide-react';
 
 // --- Firebase Imports ---
@@ -309,6 +309,7 @@ const App = () => {
     }
   };
 
+  // --- Helper Functions ---
   const cleanNumber = (str) => {
     if (!str) return 0;
     const match = str.toString().replace(/[^\d.-]/g, '');
@@ -337,6 +338,7 @@ const App = () => {
       }
   }
 
+  // --- CSV Import Logic (Auto Detect Origin) ---
   const handleFileUpload = (e) => {
     const files = Array.from(e.target.files);
     files.forEach(file => {
@@ -346,6 +348,7 @@ const App = () => {
         if (rows.length < 1) return;
         const headers = rows[0].split(',').map(h => h.trim().toLowerCase());
         
+        // 判斷是否為設定檔
         if (headers.includes('client') && headers.includes('number')) {
              const newConfig = { ...clientConfig };
              rows.slice(1).forEach(r => {
@@ -356,6 +359,11 @@ const App = () => {
              return;
         }
 
+        // 自動判斷產地：檔名含 "china" (不分大小寫) 即為 China，否則為 ER
+        const isChina = file.name.toLowerCase().includes('china');
+        const origin = isChina ? 'China' : 'ER';
+
+        // 解析訂單數據 (支援中英文欄位)
         const getIdx = (keys) => headers.findIndex(h => keys.some(k => h.includes(k)));
         const idx = {
             date: getIdx(['date', '日期']), client: getIdx(['client', '客戶']),
@@ -379,8 +387,11 @@ const App = () => {
             }
             cols.push(cur.trim());
 
+            if (cols.length < 3) return null; // 忽略無效行
+
             const productName = cols[idx.product] || '';
             const matched = vendorRules.find(rule => productName.toUpperCase().includes(rule.keyword));
+            
             return saveMasterDataRow({
                 id: `${file.name}-${rIdx}-${Date.now()}`,
                 date: cols[idx.date] || '',
@@ -395,22 +406,24 @@ const App = () => {
                 status: cols[idx.status] || '',
                 note: cols[idx.note] || '',
                 source: file.name,
+                origin: origin, // 自動標記產地
                 timestamp: Date.now()
             });
         });
-        await Promise.all(promises);
+        await Promise.all(promises.filter(p => p !== null));
         setViewMode('dashboard');
       };
       reader.readAsText(file);
     });
+    e.target.value = ''; // Reset input
   };
 
   // --- CSV Export for Tracking Table ---
   const exportTrackingCSV = () => {
-    const headers = ["下單日期", "訂單", "廠商", "品名", "顏色", "訂單數量", "實際出貨", "未出貨", "櫃號", "結案", "備註"];
+    const headers = ["下單日期", "訂單", "廠商", "產地", "品名", "顏色", "訂單數量", "實際出貨", "未出貨", "櫃號", "結案", "備註"];
     const csvRows = [headers.join(",")];
     filteredMasterData.forEach(d => {
-      const row = [d.date, d.orderNo, d.vendor, `"${d.product}"`, d.color, d.orderQty, d.shippedQty, d.orderQty - d.shippedQty, d.cabinetNo, d.status, `"${d.note}"`];
+      const row = [d.date, d.orderNo, d.vendor, d.origin, `"${d.product}"`, d.color, d.orderQty, d.shippedQty, d.orderQty - d.shippedQty, d.cabinetNo, d.status, `"${d.note}"`];
       csvRows.push(row.join(","));
     });
     const blob = new Blob(["\uFEFF" + csvRows.join("\n")], { type: 'text/csv;charset=utf-8;' });
@@ -430,15 +443,23 @@ const App = () => {
         if (!stats[key]) stats[key] = { monthKey: key, year: d.getFullYear(), month: d.getMonth() + 1, total: 0, warehouseTotal: 0, chinaTotal: 0, otherTotal: 0, clientMap: {} };
         const m = stats[key];
         m.total += amount;
-        if (source === 'Warehouse') m.warehouseTotal += amount;
+        
+        // 修正邏輯：根據 source (origin) 進行歸類
+        if (source === 'Warehouse' || source === 'ER') m.warehouseTotal += amount;
         else if (source === 'China') m.chinaTotal += amount;
         else m.otherTotal += amount;
+        
         if (!m.clientMap[client]) m.clientMap[client] = { total: 0, sources: {} };
         m.clientMap[client].total += amount;
-        m.clientMap[client].sources[source] = (m.clientMap[client].sources[source] || 0) + amount;
+        const displaySource = (source === 'ER') ? 'Warehouse' : source;
+        m.clientMap[client].sources[displaySource] = (m.clientMap[client].sources[displaySource] || 0) + amount;
     };
 
-    masterData.forEach(d => process(d.date, d.client, d.shippedQty * d.price, "Warehouse"));
+    masterData.forEach(d => {
+        const origin = d.origin || 'Warehouse'; 
+        process(d.date, d.client, d.shippedQty * d.price, origin);
+    });
+    
     manualRevenueData.forEach(d => process(d.date, d.client, d.amount, d.source || "China"));
 
     setRevenueData(Object.values(stats).map(m => ({
@@ -479,11 +500,23 @@ const App = () => {
     const res = {};
     sortedClients.forEach(c => {
         const rows = masterData.filter(d => d.client === c && d.shippedQty > 0);
-        const dates = [...new Set(rows.map(r => r.date))].sort();
+        // 重要：對日期進行排序 (將字串轉為日期物件比對)，確保 China 單可以插在中間
+        const dates = [...new Set(rows.map(r => r.date))].sort((a, b) => new Date(a) - new Date(b));
+        
         res[c] = dates.map((date, idx) => {
             const items = rows.filter(r => r.date === date);
             const conf = clientConfig[c] || { startNo: 1, prefix: c };
-            return { id: `${c}-${date}`, date, cabinetNo: items[0]?.cabinetNo || `${conf.prefix}#${conf.startNo + idx}`, client: c, items, total: items.reduce((s, i) => s + (i.shippedQty * i.price), 0) };
+            const origin = items[0]?.origin || 'ER'; 
+            
+            return { 
+                id: `${c}-${date}`, 
+                date, 
+                cabinetNo: items[0]?.cabinetNo || `${conf.prefix}#${conf.startNo + idx}`, 
+                client: c, 
+                items, 
+                origin, 
+                total: items.reduce((s, i) => s + (i.shippedQty * i.price), 0) 
+            };
         });
     });
     return res;
@@ -548,6 +581,7 @@ const App = () => {
               <th className="p-2 border-b border-r border-slate-300 w-24">下單日期</th>
               <th className="p-2 border-b border-r border-slate-300 w-24">訂單</th>
               <th className="p-2 border-b border-r border-slate-300 w-20">廠商</th>
+              <th className="p-2 border-b border-r border-slate-300 w-20">產地</th>
               <th className="p-2 border-b border-r border-slate-300">品名規格</th>
               <th className="p-2 border-b border-r border-slate-300 w-32">顏色</th>
               <th className="p-2 border-b border-r border-slate-300 w-20 text-right">訂單數</th>
@@ -563,6 +597,9 @@ const App = () => {
                 <td className="p-2 border-r border-slate-200">{d.date}</td>
                 <td className="p-2 border-r border-slate-200 font-bold">{d.orderNo}</td>
                 <td className="p-2 border-r border-slate-200 text-xs">{d.vendor}</td>
+                <td className="p-2 border-r border-slate-200 text-xs font-bold text-center">
+                    {d.origin === 'China' ? <span className="text-red-500">CN</span> : <span className="text-blue-500">ER</span>}
+                </td>
                 <td className="p-2 border-r border-slate-200 font-bold text-slate-800">{d.product}</td>
                 <td className="p-2 border-r border-slate-200 text-xs">{d.color}</td>
                 <td className="p-2 border-r border-slate-200 text-right font-mono">{d.orderQty}</td>
@@ -595,6 +632,7 @@ const App = () => {
                 <th className="p-3 w-24">日期</th>
                 <th className="p-3 w-20">客戶</th>
                 <th className="p-3 w-24">櫃號 (編輯)</th>
+                <th className="p-3 w-24">產地 (編輯)</th>
                 <th className="p-3">品名 (編輯)</th>
                 <th className="p-3 w-24">顏色 (編輯)</th>
                 <th className="p-3 w-20 text-right">出貨量</th>
@@ -611,6 +649,12 @@ const App = () => {
                       <td className="p-2"><input className="border rounded p-1 w-full" defaultValue={d.date} onChange={e => handleEditChange('date', e.target.value)} /></td>
                       <td className="p-2 font-bold">{d.client}</td>
                       <td className="p-2"><input className="border rounded p-1 w-full font-bold text-blue-600" defaultValue={d.cabinetNo} onChange={e => handleEditChange('cabinetNo', e.target.value)} placeholder="自動" /></td>
+                      <td className="p-2">
+                          <select className="border rounded p-1 w-full" defaultValue={d.origin || 'ER'} onChange={e => handleEditChange('origin', e.target.value)}>
+                              <option value="ER">ER</option>
+                              <option value="China">China</option>
+                          </select>
+                      </td>
                       <td className="p-2"><input className="border rounded p-1 w-full font-bold" autoFocus defaultValue={d.product} onChange={e => handleEditChange('product', e.target.value)} /></td>
                       <td className="p-2"><input className="border rounded p-1 w-full" defaultValue={d.color} onChange={e => handleEditChange('color', e.target.value)} /></td>
                       <td className="p-2"><input className="border rounded p-1 w-full text-right" type="number" defaultValue={d.shippedQty} onChange={e => handleEditChange('shippedQty', parseFloat(e.target.value))} /></td>
@@ -626,6 +670,7 @@ const App = () => {
                       <td className="p-3 text-slate-500">{d.date}</td>
                       <td className="p-3 font-bold text-slate-700">{d.client}</td>
                       <td className="p-3 font-bold text-blue-600">{d.cabinetNo || <span className="text-slate-300 italic text-xs">Auto</span>}</td>
+                      <td className="p-3 text-xs font-bold">{d.origin === 'China' ? <span className="text-red-500 bg-red-50 px-2 py-1 rounded">China</span> : <span className="text-blue-500 bg-blue-50 px-2 py-1 rounded">ER</span>}</td>
                       <td className="p-3 font-bold text-slate-800">{d.product}</td>
                       <td className="p-3 text-slate-600">{d.color}</td>
                       <td className="p-3 text-right font-mono">{d.shippedQty}</td>
@@ -730,7 +775,11 @@ const App = () => {
                       <div className="relative z-10">
                           <div className="flex justify-between items-start mb-4">
                             <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-md text-xs font-black shadow-sm border border-blue-200">{inv.cabinetNo}</span>
-                            <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-600 transition-colors" />
+                            {inv.origin === 'China' ? (
+                                <span className="bg-red-100 text-red-600 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 border border-red-200"><Plane className="w-3 h-3"/> CN</span>
+                            ) : (
+                                <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[10px] font-bold border border-slate-200">ER</span>
+                            )}
                           </div>
                           <div className="text-2xl font-black text-slate-800 mb-1">{inv.date}</div>
                           <div className="text-xs text-slate-400 font-bold flex items-center gap-1">
@@ -765,7 +814,11 @@ const App = () => {
       <div className="grid grid-cols-2 mb-4 text-base">
         <div className="space-y-1">
           <div className="border-b border-black pb-0.5"><span className="font-bold text-sm mr-2">TO:</span><span className="font-bold uppercase text-lg">{inv.client}</span></div>
-          <div className="border-b border-black pb-0.5"><span className="font-bold text-sm mr-2">FAX:</span></div>
+          {/* 自動顯示出貨來源 (FAX 欄位改為 From) */}
+          <div className="border-b border-black pb-0.5 flex items-end">
+              <span className="font-bold text-sm mr-2">FROM:</span>
+              <span className="font-bold text-base">{inv.origin === 'China' ? 'China' : 'ER'}</span>
+          </div>
         </div>
         <div className="space-y-1 pl-4">
           <div className="border-b border-black pb-0.5 flex justify-between"><span>DATE:</span><span className="font-bold">{inv.date}</span></div>
@@ -898,7 +951,7 @@ const App = () => {
                     </div>
                 ))}
                 
-                {/* 手動輸入紀錄明細表格 (您要求的流水帳) */}
+                {/* 手動輸入紀錄明細表格 */}
                 <div className="mt-12 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                     <h3 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
                         <Edit3 className="w-5 h-5 text-blue-500" /> 手動輸入紀錄明細 (Manual Entries)
