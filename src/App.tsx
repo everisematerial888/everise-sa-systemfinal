@@ -173,7 +173,7 @@ const SaPreviewModal = ({ show, onClose, client, orders }) => {
 
 const App = () => {
   // --- 🚨 記得填回您的 AI Key 🚨 ---
-  const apiKey = "AIzaSyD6v4BGNqEzJwAUlSmijajj_jUU715wnXc"; 
+  const apiKey = "AIzaSyD6v4BGNqEzJwAUlSmijajj_jUU715wnXc";  
 
   // --- 🚨 記得填回您的 Firebase Config 🚨 ---
   const firebaseConfig = {
