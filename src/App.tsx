@@ -465,11 +465,48 @@ const App = () => {
     e.target.value = ''; 
   };
 
+  // --- Computed ---
+  const sortedClients = useMemo(() => [...new Set(masterData.map(d => d.client))].sort(), [masterData]);
+  const filteredMasterData = useMemo(() => {
+    let d = masterData;
+    if (activeMasterClient !== 'ALL') d = d.filter(x => x.client === activeMasterClient);
+    if (searchTerm) d = d.filter(x => x.product.toLowerCase().includes(searchTerm.toLowerCase()) || x.orderNo?.toLowerCase().includes(searchTerm.toLowerCase()));
+    return d.sort((a,b) => new Date(a.date) - new Date(b.date));
+  }, [masterData, activeMasterClient, searchTerm]);
+
+  const groupedInvoices = useMemo(() => {
+    const res = {};
+    sortedClients.forEach(c => {
+        const rows = masterData.filter(d => d.client === c && d.shippedQty > 0);
+        const dates = [...new Set(rows.map(r => r.date))].sort((a, b) => new Date(a) - new Date(b));
+        
+        res[c] = dates.map((date, idx) => {
+            const items = rows.filter(r => r.date === date);
+            const conf = clientConfig[c] || { startNo: 1, prefix: c };
+            const origin = items[0]?.origin || 'ER'; 
+            
+            return { 
+                id: `${c}-${date}`, 
+                date, 
+                cabinetNo: items[0]?.cabinetNo || `${conf.prefix}#${conf.startNo + idx}`, 
+                client: c, 
+                items, 
+                origin, 
+                total: items.reduce((s, i) => s + (i.shippedQty * i.price), 0) 
+            };
+        });
+    });
+    return res;
+  }, [masterData, clientConfig, sortedClients]);
+
+  // 更新 Export Tracking CSV 邏輯，自動抓取動態櫃號
   const exportTrackingCSV = () => {
     const headers = ["下單日期", "訂單", "廠商", "產地", "品名", "顏色", "訂單數量", "實際出貨", "未出貨", "櫃號", "結案", "備註"];
     const csvRows = [headers.join(",")];
     filteredMasterData.forEach(d => {
-      const row = [d.date, d.orderNo, d.vendor, d.origin, `"${d.product}"`, d.color, d.orderQty || 0, `"${d.shippedDisplay || d.shippedQty}"`, (d.orderQty || 0) - d.shippedQty, d.cabinetNo, d.status, `"${d.note}"`];
+      // 動態抓取櫃號邏輯
+      const dynamicCabinet = d.cabinetNo || groupedInvoices[d.client]?.find(inv => inv.date === d.date)?.cabinetNo || "";
+      const row = [d.date, d.orderNo, d.vendor, d.origin, `"${d.product}"`, d.color, d.orderQty || 0, `"${d.shippedDisplay || d.shippedQty}"`, (d.orderQty || 0) - d.shippedQty, dynamicCabinet, d.status, `"${d.note}"`];
       csvRows.push(row.join(","));
     });
     const blob = new Blob(["\uFEFF" + csvRows.join("\n")], { type: 'text/csv;charset=utf-8;' });
@@ -520,40 +557,6 @@ const App = () => {
         ...m, clients: Object.entries(m.clientMap).map(([client, data]) => ({ client, amount: data.total, sources: data.sources })).sort((a,b) => b.amount - a.amount)
     })).sort((a,b) => b.monthKey.localeCompare(a.monthKey)));
   }, [masterData, manualRevenueData]);
-
-  // --- Computed ---
-  const sortedClients = useMemo(() => [...new Set(masterData.map(d => d.client))].sort(), [masterData]);
-  const filteredMasterData = useMemo(() => {
-    let d = masterData;
-    if (activeMasterClient !== 'ALL') d = d.filter(x => x.client === activeMasterClient);
-    if (searchTerm) d = d.filter(x => x.product.toLowerCase().includes(searchTerm.toLowerCase()) || x.orderNo?.toLowerCase().includes(searchTerm.toLowerCase()));
-    return d.sort((a,b) => new Date(a.date) - new Date(b.date));
-  }, [masterData, activeMasterClient, searchTerm]);
-
-  const groupedInvoices = useMemo(() => {
-    const res = {};
-    sortedClients.forEach(c => {
-        const rows = masterData.filter(d => d.client === c && d.shippedQty > 0);
-        const dates = [...new Set(rows.map(r => r.date))].sort((a, b) => new Date(a) - new Date(b));
-        
-        res[c] = dates.map((date, idx) => {
-            const items = rows.filter(r => r.date === date);
-            const conf = clientConfig[c] || { startNo: 1, prefix: c };
-            const origin = items[0]?.origin || 'ER'; 
-            
-            return { 
-                id: `${c}-${date}`, 
-                date, 
-                cabinetNo: items[0]?.cabinetNo || `${conf.prefix}#${conf.startNo + idx}`, 
-                client: c, 
-                items, 
-                origin, 
-                total: items.reduce((s, i) => s + (i.shippedQty * i.price), 0) 
-            };
-        });
-    });
-    return res;
-  }, [masterData, clientConfig, sortedClients]);
 
   const callGemini = async () => {
     const keyToUse = userApiKey || apiKeyDefault;
@@ -660,7 +663,10 @@ const App = () => {
                 <td className="p-2 border-r border-slate-200 text-right font-mono">{d.orderQty}</td>
                 <td className="p-2 border-r border-slate-200 text-right font-mono font-bold text-blue-600">{d.shippedDisplay || d.shippedQty}</td>
                 <td className="p-2 border-r border-slate-200 text-right font-mono text-red-500 font-bold">{d.orderQty - d.shippedQty !== 0 ? d.orderQty - d.shippedQty : ''}</td>
-                <td className="p-2 border-r border-slate-200 text-center text-xs">{d.cabinetNo}</td>
+                {/* 這裡加入動態櫃號抓取 */}
+                <td className="p-2 border-r border-slate-200 text-center text-xs font-bold text-blue-600">
+                  {d.cabinetNo || groupedInvoices[d.client]?.find(inv => inv.date === d.date)?.cabinetNo || '-'}
+                </td>
                 <td className="p-2 text-center font-bold text-xs">{d.status}</td>
               </tr>
             ))}
@@ -703,7 +709,7 @@ const App = () => {
                     <>
                       <td className="p-2"><input className="border rounded p-1 w-full" defaultValue={d.date} onChange={e => handleEditChange('date', e.target.value)} /></td>
                       <td className="p-2 font-bold">{d.client}</td>
-                      <td className="p-2"><input className="border rounded p-1 w-full font-bold text-blue-600" defaultValue={d.cabinetNo} onChange={e => handleEditChange('cabinetNo', e.target.value)} placeholder="自動" /></td>
+                      <td className="p-2"><input className="border rounded p-1 w-full font-bold text-blue-600" defaultValue={d.cabinetNo || groupedInvoices[d.client]?.find(inv => inv.date === d.date)?.cabinetNo || ''} onChange={e => handleEditChange('cabinetNo', e.target.value)} placeholder="手動覆蓋" /></td>
                       <td className="p-2">
                           <select className="border rounded p-1 w-full" defaultValue={d.origin || 'ER'} onChange={e => handleEditChange('origin', e.target.value)}>
                               <option value="ER">ER</option>
@@ -724,7 +730,10 @@ const App = () => {
                     <>
                       <td className="p-3 text-slate-500">{d.date}</td>
                       <td className="p-3 font-bold text-slate-700">{d.client}</td>
-                      <td className="p-3 font-bold text-blue-600">{d.cabinetNo || <span className="text-slate-300 italic text-xs">Auto</span>}</td>
+                      {/* 這裡加入動態櫃號抓取 */}
+                      <td className="p-3 font-bold text-blue-600">
+                        {d.cabinetNo || groupedInvoices[d.client]?.find(inv => inv.date === d.date)?.cabinetNo || <span className="text-slate-300 italic text-xs">Auto</span>}
+                      </td>
                       <td className="p-3 text-xs font-bold">{d.origin === 'China' ? <span className="text-red-500 bg-red-50 px-2 py-1 rounded">China</span> : <span className="text-blue-500 bg-blue-50 px-2 py-1 rounded">ER</span>}</td>
                       <td className="p-3 font-bold text-slate-800">{d.product}</td>
                       <td className="p-3 text-slate-600">{d.color}</td>
