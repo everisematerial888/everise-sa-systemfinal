@@ -1,22 +1,16 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
-  FileText, Upload, Printer, ChevronRight, Hash, 
-  ArrowLeft, Settings, Search,
-  CheckCircle2, FileSpreadsheet,
-  Table as TableIcon, LayoutDashboard, Edit3, X, Trash,
-  Download, Database, Layers, Sparkles, MessageSquare, Loader2,
-  TrendingUp, BarChart3, Calculator,
-  Cloud, CloudOff, LogOut, Lock, Globe, Container, PlusCircle, Save, History, Trash2, PieChart
+  FileText, Upload, Printer, Search, X, 
+  Table as TableIcon, Layers, Sparkles, MessageSquare, Loader2,
+  PieChart, Container, PlusCircle, Save, History, Trash2, MapPin, Package
 } from 'lucide-react';
-import { initializeApp } from 'firebase/app';
-import { 
-  getAuth, signInAnonymously, onAuthStateChanged 
-} from 'firebase/auth';
-import { 
-  getFirestore, collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, writeBatch, query, orderBy, where, getDocs
-} from 'firebase/firestore';
 
-// --- AI Modal ---
+// --- Firebase Imports ---
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, query, orderBy, where, getDocs } from 'firebase/firestore';
+
+// --- 獨立的 AI Modal ---
 const AiModal = ({ show, onClose, prompt, setPrompt, onSend, response, loading }) => {
   if (!show) return null;
   return (
@@ -41,14 +35,7 @@ const AiModal = ({ show, onClose, prompt, setPrompt, onSend, response, loading }
           )}
         </div>
         <div className="p-4 bg-white border-t flex gap-2">
-          <input 
-            type="text" 
-            className="flex-1 border rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:outline-none"
-            placeholder="輸入問題..."
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && onSend()}
-          />
+          <input type="text" className="flex-1 border rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500 outline-none" placeholder="輸入問題..." value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && onSend()} />
           <button onClick={onSend} disabled={loading || !prompt} className="bg-purple-600 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2">
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />} 送出
           </button>
@@ -77,8 +64,8 @@ const ManualAddModal = ({ show, onClose, onSave }) => {
           <button onClick={onClose}><X className="w-5 h-5 text-slate-400" /></button>
         </div>
         <div className="p-6 space-y-4">
-          <div><label className="block text-sm font-medium mb-1">櫃號</label><input type="text" className="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500" value={containerNo} onChange={e => setContainerNo(e.target.value)} /></div>
-          <div><label className="block text-sm font-medium mb-1">金額</label><input type="number" className="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500" value={amount} onChange={e => setAmount(e.target.value)} /></div>
+          <div><label className="block text-sm font-medium mb-1">櫃號 (例: CN-888)</label><input type="text" className="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500" value={containerNo} onChange={e => setContainerNo(e.target.value)} /></div>
+          <div><label className="block text-sm font-medium mb-1">總金額 (THB)</label><input type="number" className="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500" value={amount} onChange={e => setAmount(e.target.value)} /></div>
         </div>
         <div className="p-4 bg-slate-50 border-t flex justify-end gap-2">
           <button onClick={onClose} className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg">取消</button>
@@ -142,12 +129,10 @@ const SaPreviewModal = ({ show, onClose, client, orders }) => {
                     {order['單號']}<br/><span className="text-xs text-slate-400">{order['櫃號']} {order['出貨地'] === 'CN' ? '(CN)' : ''}</span>
                   </td>
                   <td className="py-3 text-slate-600">{order['品名'] || 'General Item'}</td>
-                  
-                  {/* 印出自動換算後的明細，例如: 50*2R+45=145Y */}
+                  {/* 🌟 核心：印出零碼布明細，例如: 50*2R+45=145Y */}
                   <td className="py-3 text-right font-bold text-slate-800 whitespace-nowrap">
                     {order['數量明細'] || Number(order['數量']).toLocaleString()}
                   </td>
-                  
                   <td className="py-3 text-right">{Number(order['單價']).toFixed(2)}</td>
                   <td className="py-3 text-right font-bold text-slate-800">
                     {(Number(order['總價']) || (Number(order['數量'])*Number(order['單價']))).toLocaleString()}
@@ -172,19 +157,19 @@ const SaPreviewModal = ({ show, onClose, client, orders }) => {
 };
 
 const App = () => {
-  // --- 🚨 1. 請填回您的 AI Key 🚨 ---
-  const apiKey = "AIzaSyD6v4BGNqEzJwAUlSmijajj_jUU715wnXc"; 
+  // --- 您的專屬 API Key (已自動填入) ---
+  const apiKey = "AIzaSyDsGkGsWS4sRIn3o9XzWmqGSbZg4i5Dc9g"; 
 
-  // --- 🚨 2. 請填回您的 Firebase Config 🚨 ---
+  // --- 您的專屬 Firebase Config (已自動填入) ---
   const firebaseConfig = {
     apiKey: "AIzaSyDsGkGsWS4sRIn3o9XzWmqGSbZg4i5Dc9g",
-  authDomain: "sa-test-96792.firebaseapp.com",
-  projectId: "sa-test-96792",
-  storageBucket: "sa-test-96792.firebasestorage.app",
-  messagingSenderId: "736271192466",
-  appId: "1:736271192466:web:1517c3d40e3e61d1c1b14b",
-  measurementId: "G-1X3X3FWSM7"
-};
+    authDomain: "sa-test-96792.firebaseapp.com",
+    projectId: "sa-test-96792",
+    storageBucket: "sa-test-96792.firebasestorage.app",
+    messagingSenderId: "736271192466",
+    appId: "1:736271192466:web:1517c3d40e3e61d1c1b14b",
+    measurementId: "G-1X3X3FWSM7"
+  };
 
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
@@ -206,6 +191,7 @@ const App = () => {
   const [aiResponse, setAiResponse] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
 
+  // --- 資料同步 ---
   useEffect(() => {
     onAuthStateChanged(auth, u => { setUser(u); if (!u) signInAnonymously(auth); });
     const unsubOrders = onSnapshot(collection(db, 'orders'), snap => {
@@ -217,7 +203,7 @@ const App = () => {
       setUploadHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
     return () => { unsubOrders(); unsubHistory(); };
-  }, []);
+  }, [auth, db]);
 
   const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(Number(val) || 0);
   const isChinaOrder = (o) => ['CN', 'China', '中國'].some(k => String(o['出貨地']||o['Origin']||'').includes(k));
@@ -252,11 +238,11 @@ const App = () => {
     if (name.includes('CHACK FACE') || name.includes('CRACKED FACE')) return 40;
     if (name.includes('KEVLAR')) return 40;
     if (name.includes('LACOSTE')) return 40;
-    if (name.includes('VACUUM')) return 40;
+    if (name.includes('VACUUM') || name.includes('VACUMN')) return 40;
     if (name.includes('CHECKER')) return 40;
     if (name.includes('385')) return 40;
     if (name.includes('305')) return 40;
-    return 50; // 預設 50Y/R
+    return 50; // 預設其他布料都是 50Y/R
   };
 
   const handleFileUpload = async (event) => {
@@ -273,6 +259,7 @@ const App = () => {
       const headers = rows[0].split(',').map(h => h.trim());
       const batch = writeBatch(db);
       let count = 0;
+      
       const isSimpleChina = headers.includes('櫃號') && headers.includes('金額') && headers.length <= 4;
 
       for (let i = 1; i < rows.length; i++) {
@@ -295,9 +282,11 @@ const App = () => {
           // 🌟 處理數量的轉換邏輯
           const qtyVal = rowData['數量'] || '';
           if (qtyVal.includes('=') || qtyVal.includes('＝')) {
+            // 已有等號 (例如 40*30R+15=1215Y)，直接取明細，並抽出最後的數字作為總量
             rowData['數量明細'] = qtyVal;
             rowData['數量'] = parseFloat(qtyVal.split(/=|＝/)[1].replace(/[^0-9.-]/g, '')) || 0;
           } else {
+            // 舊資料只有總量 (例如 1215)，系統自動換算
             let totalQty = parseFloat(qtyVal.replace(/[^0-9.-]/g, '')) || 0;
             rowData['數量'] = totalQty;
             
@@ -333,7 +322,20 @@ const App = () => {
     reader.readAsText(file);
   };
 
-  const handleAiAnalysis = async () => { /* AI Logic */ };
+  const handleAiAnalysis = async () => {
+    if (!aiPrompt) return;
+    setIsAiLoading(true);
+    const context = `資料庫有 ${masterData.length} 筆訂單。問題: "${aiPrompt}"`;
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: context }] }] })
+      });
+      const data = await res.json();
+      setAiResponse(data.candidates?.[0]?.content?.parts?.[0]?.text || "AI 思考失敗");
+    } catch (e) { setAiResponse("錯誤：" + e.message); }
+    finally { setIsAiLoading(false); }
+  };
 
   const clients = useMemo(() => ['ALL', ...new Set(masterData.map(o => o['客戶']).filter(Boolean))].sort(), [masterData]);
   const saFilteredOrders = useMemo(() => saClient && saClient !== 'ALL' ? masterData.filter(o => o['客戶'] === saClient) : [], [saClient, masterData]);
@@ -381,7 +383,6 @@ const App = () => {
 
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden min-h-[500px]">
           
-          {/* SA 請款單 */}
           {viewMode === 'sa' && (
             <div className="p-8">
               <div className="flex flex-col md:flex-row justify-between items-center bg-emerald-50 p-6 rounded-xl border border-emerald-100 mb-6">
@@ -423,7 +424,6 @@ const App = () => {
             </div>
           )}
 
-          {/* 年度明細 */}
           {viewMode === 'list' && (
             <div>
               <div className="p-4 bg-slate-50 border-b flex items-center gap-2"><Search className="w-4 h-4 text-slate-400"/><input type="text" placeholder="搜尋任何資料..." className="bg-transparent outline-none text-sm w-full" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}/></div>
@@ -449,7 +449,6 @@ const App = () => {
             </div>
           )}
 
-          {/* 營業額總攬 */}
           {viewMode === 'client' && (
              <div className="p-8 space-y-6">
                 <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2 mb-6"><PieChart className="w-6 h-6 text-purple-600"/> 營業額結構分析 (紅藍圖)</h2>
@@ -467,7 +466,6 @@ const App = () => {
              </div>
           )}
 
-          {/* 資料來源管理 */}
           {viewMode === 'settings' && (
              <div className="p-8">
                 <div className="flex justify-between items-center mb-6">
@@ -486,6 +484,7 @@ const App = () => {
                             <td className="p-4 text-right"><button onClick={() => handleDeleteBatch(log.id)} className="text-red-500 hover:bg-red-50 px-3 py-1.5 border border-red-200 rounded flex items-center gap-1 ml-auto"><Trash2 className="w-3 h-3"/> 刪除整批</button></td>
                          </tr>
                        ))}
+                       {uploadHistory.length === 0 && <tr><td colSpan="4" className="p-8 text-center text-slate-400">目前沒有資料紀錄</td></tr>}
                      </tbody>
                    </table>
                 </div>
