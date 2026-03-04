@@ -19,7 +19,7 @@ import {
   getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, writeBatch
 } from 'firebase/firestore';
 
-// --- 設定區：Firebase 設定 (已綁定專屬雲端) ---
+// --- 設定區：Firebase 設定 ---
 const firebaseConfig = {
   apiKey: "AIzaSyDsGkGsWS4sRIn3o9XzWmqGSbZg4i5Dc9g",
   authDomain: "sa-test-96792.firebaseapp.com",
@@ -62,7 +62,6 @@ const parseQuantity = (rawQtyStr, productName) => {
   if (!rawQtyStr) return { display: '', value: 0 };
   const str = String(rawQtyStr).trim().toUpperCase();
 
-  // 若已經包含完整算式 (例如 40*30R+15=1215Y)
   if (str.includes('=') || str.includes('*')) {
       const match = str.match(/=([\d.]+)\s*Y?/);
       if (match) {
@@ -73,11 +72,10 @@ const parseQuantity = (rawQtyStr, productName) => {
       }
   }
 
-  // 若只有純數字，進行智能逆向推算
   const qty = parseFloat(str.replace(/[^\d.-]/g, ''));
   if (isNaN(qty) || qty === 0) return { display: '0', value: 0 };
 
-  let yPerRoll = 50; // 預設 50Y/R
+  let yPerRoll = 50; 
   const pName = (productName || '').toUpperCase();
   
   if (pName.includes('210 PU')) {
@@ -245,7 +243,7 @@ const App = () => {
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
-  const appId = 'everise-app'; 
+  const appId = 'default-app-id'; 
 
   // --- State ---
   const [user, setUser] = useState(null);
@@ -367,7 +365,6 @@ const App = () => {
     if (!editingId) return;
     const updates = { ...editValues.current };
     
-    // 如果編輯了品名或出貨量字串，重新通過大腦進行智能解析
     if (updates.shippedDisplay !== undefined || updates.product !== undefined) {
         const finalProduct = updates.product !== undefined ? updates.product : masterData.find(x => x.id === editingId)?.product;
         const finalDisplay = updates.shippedDisplay !== undefined ? updates.shippedDisplay : masterData.find(x => x.id === editingId)?.shippedDisplay;
@@ -388,7 +385,7 @@ const App = () => {
       }
   }
 
-  // --- CSV Import Logic (Auto Detect Origin by Filename) ---
+  // --- CSV Import Logic ---
   const handleFileUpload = (e) => {
     const files = Array.from(e.target.files);
     files.forEach(file => {
@@ -439,7 +436,6 @@ const App = () => {
             const productName = cols[idx.product]?.replace(/"/g, '') || '';
             const matched = vendorRules.find(rule => productName.toUpperCase().includes(rule.keyword));
             
-            // 透過智能大腦解析數量
             const parsedQty = parseQuantity(cols[idx.shipped], productName);
             
             return saveMasterDataRow({
@@ -560,7 +556,22 @@ const App = () => {
   }, [masterData, clientConfig, sortedClients]);
 
   const callGemini = async () => {
-    // 省略未修改的 AI 區塊...
+    const keyToUse = userApiKey || apiKeyDefault;
+    if (!aiPrompt.trim() || !keyToUse) return;
+    setIsAiLoading(true);
+    try {
+      const dataSummary = filteredMasterData.slice(0, 50).map(d => ({ date: d.date, client: d.client, product: d.product, qty: d.shippedQty, price: d.price }));
+      const revenueSummary = revenueData.slice(0, 6).map(r => `${r.monthKey}: ${r.total} THB`).join('\n');
+      const systemPrompt = `您是專業分析師。單位均為泰銖(THB)。營收摘要：\n${revenueSummary}\n明細參考：${JSON.stringify(dataSummary)}`;
+      
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${keyToUse}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: `${systemPrompt}\n\n問題：${aiPrompt}` }] }] })
+      });
+      const data = await res.json();
+      setAiResponse(data.candidates?.[0]?.content?.parts?.[0]?.text || "無回應");
+    } catch (e) { setAiResponse("錯誤：" + e.message); }
+    finally { setIsAiLoading(false); }
   };
 
   // --- Components ---
@@ -583,7 +594,6 @@ const App = () => {
         </div>
       </div>
       <div className="flex gap-3 items-center">
-        {/* 新增了手動記帳的顯眼按鈕 */}
         <button onClick={() => setShowRevenueModal(true)} className="bg-rose-500 hover:bg-rose-600 text-white px-4 py-2 rounded-lg cursor-pointer font-bold text-xs flex items-center gap-2 transition-colors shadow-sm">
           <Plus className="w-4 h-4" /> 手動記帳
         </button>
@@ -598,9 +608,66 @@ const App = () => {
   );
 
   const TrackingTableView = () => (
-    // ...保持原樣，僅調整數量顯示...
-    <td className="p-2 border-r border-slate-200 text-right font-mono font-bold text-blue-600">{d.shippedDisplay || d.shippedQty}</td>
-    // ...
+    <div className="p-6 animate-in fade-in duration-500 min-h-screen bg-white">
+      <div className="mb-6 flex justify-between items-center print:hidden">
+        <div>
+          <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2">
+            <FileSpreadsheet className="w-6 h-6 text-emerald-600" /> 客戶訂單總表
+          </h2>
+          <div className="flex flex-wrap gap-2 mt-2">
+            {['ALL', ...sortedClients].map(c => (
+              <button key={c} onClick={() => setActiveMasterClient(c)} className={`px-3 py-1 rounded border text-xs font-bold ${activeMasterClient === c ? 'bg-slate-900 text-white' : 'bg-white text-slate-500'}`}>{c}</button>
+            ))}
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+            <input type="text" placeholder="搜尋..." className="pl-8 pr-4 py-2 border rounded-lg text-sm w-48" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          </div>
+          <button onClick={exportTrackingCSV} className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"><Download className="w-4 h-4" /> 匯出</button>
+          <button onClick={() => window.print()} className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"><Printer className="w-4 h-4" /> 列印</button>
+        </div>
+      </div>
+      <div className="border border-slate-300 overflow-auto max-h-[80vh]">
+        <table className="w-full text-left text-sm border-collapse">
+          <thead className="bg-slate-100 sticky top-0 z-10 text-xs font-black text-slate-600 uppercase tracking-wider">
+            <tr>
+              <th className="p-2 border-b border-r border-slate-300 w-24">下單日期</th>
+              <th className="p-2 border-b border-r border-slate-300 w-24">訂單</th>
+              <th className="p-2 border-b border-r border-slate-300 w-20">廠商</th>
+              <th className="p-2 border-b border-r border-slate-300 w-20">產地</th>
+              <th className="p-2 border-b border-r border-slate-300">品名規格</th>
+              <th className="p-2 border-b border-r border-slate-300 w-32">顏色</th>
+              <th className="p-2 border-b border-r border-slate-300 w-20 text-right">訂單數</th>
+              <th className="p-2 border-b border-r border-slate-300 w-20 text-right">實際出貨</th>
+              <th className="p-2 border-b border-r border-slate-300 w-20 text-right">未出貨</th>
+              <th className="p-2 border-b border-r border-slate-300 w-20 text-center">櫃號</th>
+              <th className="p-2 border-b border-slate-300 w-16 text-center">結案</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200">
+            {filteredMasterData.map((d, i) => (
+              <tr key={d.id} className={`hover:bg-blue-50 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>
+                <td className="p-2 border-r border-slate-200">{d.date}</td>
+                <td className="p-2 border-r border-slate-200 font-bold">{d.orderNo}</td>
+                <td className="p-2 border-r border-slate-200 text-xs">{d.vendor}</td>
+                <td className="p-2 border-r border-slate-200 text-xs font-bold text-center">
+                    {d.origin === 'China' ? <span className="text-red-500">CN</span> : <span className="text-blue-500">ER</span>}
+                </td>
+                <td className="p-2 border-r border-slate-200 font-bold text-slate-800">{d.product}</td>
+                <td className="p-2 border-r border-slate-200 text-xs">{d.color}</td>
+                <td className="p-2 border-r border-slate-200 text-right font-mono">{d.orderQty}</td>
+                <td className="p-2 border-r border-slate-200 text-right font-mono font-bold text-blue-600">{d.shippedDisplay || d.shippedQty}</td>
+                <td className="p-2 border-r border-slate-200 text-right font-mono text-red-500 font-bold">{d.orderQty - d.shippedQty !== 0 ? d.orderQty - d.shippedQty : ''}</td>
+                <td className="p-2 border-r border-slate-200 text-center text-xs">{d.cabinetNo}</td>
+                <td className="p-2 text-center font-bold text-xs">{d.status}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 
   const MasterTableView = () => (
@@ -645,7 +712,6 @@ const App = () => {
                       </td>
                       <td className="p-2"><input className="border rounded p-1 w-full font-bold" autoFocus defaultValue={d.product} onChange={e => handleEditChange('product', e.target.value)} /></td>
                       <td className="p-2"><input className="border rounded p-1 w-full" defaultValue={d.color} onChange={e => handleEditChange('color', e.target.value)} /></td>
-                      {/* 出貨量改為可以輸入字串 */}
                       <td className="p-2"><input className="border rounded p-1 w-full text-right" type="text" defaultValue={d.shippedDisplay || d.shippedQty} onChange={e => handleEditChange('shippedDisplay', e.target.value)} /></td>
                       <td className="p-2"><input className="border rounded p-1 w-full text-right" type="number" defaultValue={d.price} onChange={e => handleEditChange('price', parseFloat(e.target.value))} /></td>
                       <td className="p-2"><input className="border rounded p-1 w-full" defaultValue={d.vendor} onChange={e => handleEditChange('vendor', e.target.value)} /></td>
@@ -681,7 +747,115 @@ const App = () => {
   );
 
   const Dashboard = () => {
-    // 省略未修改區塊，主要使用 item.shippedDisplay 替換...
+    const updateStartNo = async (client, currentStart, count) => {
+        const nextStart = currentStart + count;
+        if (window.confirm(`確認要更新 ${client} 的起始櫃號嗎？\n\n目前起始：${currentStart}\n本批單數：${count}\n\n更新後下次將從 [ ${nextStart} ] 開始編號。`)) {
+            const newConfig = { ...clientConfig };
+            if (!newConfig[client]) {
+                newConfig[client] = { startNo: nextStart, prefix: client };
+            } else {
+                newConfig[client].startNo = nextStart;
+            }
+            await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'config'), { clientConfig: newConfig }, { merge: true });
+        }
+    };
+
+    const manualEditStartNo = async (client) => {
+        const current = clientConfig[client]?.startNo || 1;
+        const input = prompt(`請手動輸入 ${client} 的起始櫃號：`, current);
+        if (input && !isNaN(input)) {
+            const newNo = parseInt(input);
+            const newConfig = { ...clientConfig };
+            if (!newConfig[client]) newConfig[client] = { startNo: newNo, prefix: client };
+            else newConfig[client].startNo = newNo;
+            await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'config'), { clientConfig: newConfig }, { merge: true });
+        }
+    };
+
+    return (
+      <div className="max-w-7xl mx-auto p-12 min-h-screen bg-slate-50">
+        {sortedClients.length === 0 ? (
+          <div className="text-center py-40 border-4 border-dashed border-slate-200 rounded-3xl">
+             <LayoutDashboard className="w-20 h-20 text-slate-300 mx-auto mb-4" />
+             <p className="text-slate-400 font-bold text-xl">請先匯入 CSV 資料</p>
+          </div>
+        ) : (
+          sortedClients.map(client => {
+            const currentInvoices = groupedInvoices[client] || [];
+            const config = clientConfig[client] || { startNo: 1, prefix: client };
+            const nextStartNo = config.startNo + currentInvoices.length;
+
+            return (
+              <div key={client} className="mb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 border-b-2 border-slate-200 pb-4 gap-4">
+                  <div>
+                    <div className="flex items-center gap-4 mb-3">
+                      <span className="bg-slate-900 text-white px-6 py-2 rounded-xl font-black text-3xl shadow-lg">{client}</span>
+                      <h2 className="text-xl font-bold text-slate-400">請款單列表</h2>
+                    </div>
+                    <div className="bg-white border border-slate-300 rounded-lg p-3 flex items-center gap-4 shadow-sm">
+                        <div className="flex flex-col">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Current Start</span>
+                            <div className="flex items-center gap-2">
+                                <span className="font-mono font-black text-xl text-slate-700">#{config.startNo}</span>
+                                <button onClick={() => manualEditStartNo(client)} className="text-slate-300 hover:text-blue-500"><Edit3 className="w-3 h-3" /></button>
+                            </div>
+                        </div>
+                        <div className="h-8 w-px bg-slate-200"></div>
+                        <div className="flex flex-col">
+                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">This Batch</span>
+                             <span className="font-mono font-bold text-blue-600">+{currentInvoices.length} 張</span>
+                        </div>
+                        <div className="h-8 w-px bg-slate-200"></div>
+                        <button 
+                            onClick={() => updateStartNo(client, config.startNo, currentInvoices.length)}
+                            className="bg-slate-100 hover:bg-slate-800 hover:text-white text-slate-600 px-3 py-1.5 rounded-md text-xs font-bold transition-colors flex items-center gap-2"
+                        >
+                            <span>設定下次從</span>
+                            <span className="bg-yellow-300 text-black px-1 rounded font-mono">#{nextStartNo}</span>
+                            <span>開始</span>
+                            <ChevronRight className="w-3 h-3" />
+                        </button>
+                    </div>
+                  </div>
+                  <button onClick={() => { setActiveClient(client); setViewMode('printAll'); }} className="bg-emerald-600 text-white px-5 py-3 rounded-xl font-bold flex items-center gap-2 shadow-md hover:bg-emerald-700 hover:-translate-y-0.5 transition-all">
+                    <Layers className="w-5 h-5" /> 列印本區所有 SA
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                  {currentInvoices.map(inv => (
+                    <div key={inv.id} onClick={() => { setActiveClient(client); setSelectedInvoiceId(inv.id); setViewMode('preview'); }} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer group relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-slate-100 to-transparent rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-150"></div>
+                      <div className="relative z-10">
+                          <div className="flex justify-between items-start mb-4">
+                            <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-md text-xs font-black shadow-sm border border-blue-200">{inv.cabinetNo}</span>
+                            {inv.origin === 'China' ? (
+                                <span className="bg-red-100 text-red-600 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 border border-red-200"><Plane className="w-3 h-3"/> CN</span>
+                            ) : (
+                                <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[10px] font-bold border border-slate-200">ER</span>
+                            )}
+                          </div>
+                          <div className="text-2xl font-black text-slate-800 mb-1">{inv.date}</div>
+                          <div className="text-xs text-slate-400 font-bold flex items-center gap-1">
+                              <Package className="w-3 h-3" /> {inv.items.length} 筆明細
+                          </div>
+                          <div className="mt-6 pt-4 border-t border-slate-100 text-right">
+                            <span className="text-2xl font-black text-emerald-600 tracking-tight">
+                                <span className="text-xs text-emerald-400 font-normal mr-1">THB</span>
+                                {Math.round(inv.total).toLocaleString()}
+                            </span>
+                          </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    );
   };
 
   const InvoiceTemplate = ({ inv }) => (
@@ -712,7 +886,6 @@ const App = () => {
               <tr><td colSpan="3" className="pt-2 pb-1 font-bold text-lg">ORDER "{item.product}"</td></tr>
               <tr className="text-sm">
                 <td className="w-1/3 py-1 font-bold uppercase">{item.color}</td>
-                {/* 套用智能數量的顯示格式 */}
                 <td className="py-1 text-center font-mono">{item.shippedDisplay || item.shippedQty + ' Y'} x {item.price.toFixed(2)} = THB</td>
                 <td className="py-1 text-right font-bold text-base">{(item.shippedQty * item.price).toLocaleString()}</td>
               </tr>
@@ -731,10 +904,234 @@ const App = () => {
     </div>
   );
 
-  const PrintAllView = () => { /* ... */ };
+  const PrintAllView = () => (
+    <div className="bg-slate-200 min-h-screen py-10 print:bg-white print:p-0 flex flex-col items-center">
+      <div className="w-[210mm] mb-6 flex justify-between items-center print:hidden px-4">
+        <button onClick={() => setViewMode('dashboard')} className="text-slate-700 flex items-center gap-2 hover:text-blue-700 font-bold"><ArrowLeft className="w-5 h-5" /> 返回儀表板</button>
+        <button onClick={() => window.print()} className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 shadow-xl"><Printer className="w-5 h-5" /> 列印全部</button>
+      </div>
+      <div id="print-area">
+        {groupedInvoices[activeClient]?.map(inv => (
+          <div key={inv.id} className="print-page-break">
+            <InvoiceTemplate inv={inv} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
-      // ...省略未修改的 Main Render Logic...
+    <div className="bg-slate-50 min-h-screen font-sans">
+      <Navbar />
+      <AiModal show={showAiModal} onClose={() => setShowAiModal(false)} prompt={aiPrompt} setPrompt={setAiPrompt} onSend={callGemini} response={aiResponse} loading={isAiLoading} hasKey={!!userApiKey} />
+      <ManualRevenueModal show={showRevenueModal} onClose={() => setShowRevenueModal(false)} onSave={addManualRevenue} />
+      
+      <main className="p-6">
+        {viewMode === 'dashboard' && <Dashboard />}
+
+        {viewMode === 'trackingTable' && <TrackingTableView />}
+
+        {viewMode === 'revenueStats' && (
+            <div className="max-w-6xl mx-auto space-y-6">
+                <div className="flex justify-between items-center">
+                    <h2 className="text-3xl font-black">年度營業額統計</h2>
+                    <button onClick={() => setShowRevenueModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"><Plus className="w-4 h-4"/>新增營收</button>
+                </div>
+                
+                {revenueData.map((data) => (
+                    <div key={data.monthKey} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
+                        <div className="p-6 flex flex-col md:flex-row gap-6 items-start">
+                            <div className="w-full md:w-48 shrink-0 border-b md:border-b-0 md:border-r border-slate-100 pb-4 md:pb-0 md:pr-4">
+                                <div className="text-sm font-bold text-slate-400 uppercase tracking-wider">{data.year}</div>
+                                <div className="text-4xl font-black text-slate-800">{data.month} <span className="text-lg text-slate-400">月</span></div>
+                                <div className="mt-2 text-xl font-black text-emerald-600 flex items-center gap-1">
+                                    <span className="text-xs text-emerald-400">THB</span>
+                                    {data.total.toLocaleString()}
+                                </div>
+                                <div className="mt-4 h-2 bg-slate-100 rounded-full overflow-hidden w-full">
+                                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `100%` }}></div>
+                                </div>
+                                
+                                <div className="mt-4 space-y-2 border-t border-slate-100 pt-2">
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="text-slate-400 font-bold flex items-center gap-1"><Package className="w-3 h-3" /> 倉庫</span>
+                                        <span className="font-mono font-bold text-blue-600">{data.warehouseTotal.toLocaleString()}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="text-slate-400 font-bold flex items-center gap-1"><MapPin className="w-3 h-3" /> 中國</span>
+                                        <span className="font-mono font-bold text-red-500">{data.chinaTotal.toLocaleString()}</span>
+                                    </div>
+                                    {data.otherTotal > 0 && (
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="text-slate-400 font-bold flex items-center gap-1"><Hash className="w-3 h-3" /> 其他</span>
+                                            <span className="font-mono font-bold text-yellow-600">{data.otherTotal.toLocaleString()}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="flex-1 w-full">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                                    {data.clients.map((client, idx) => (
+                                        <div key={idx} className="flex flex-col bg-slate-50 p-2 rounded border border-slate-100 relative group">
+                                            <div className="flex justify-between items-baseline mb-1">
+                                                <span className="text-xs font-black text-slate-700 truncate">{idx + 1}. {client.client}</span>
+                                            </div>
+                                            <span className="text-sm font-mono text-emerald-600 font-bold block">{client.amount.toLocaleString()}</span>
+                                            
+                                            <div className="mt-1 flex h-1.5 w-full rounded-full overflow-hidden bg-slate-200">
+                                                {client.sources['Warehouse'] > 0 && (
+                                                    <div className="h-full bg-blue-400" style={{ width: `${(client.sources['Warehouse'] / client.amount) * 100}%` }} title={`Warehouse: ${client.sources['Warehouse'].toLocaleString()}`}></div>
+                                                )}
+                                                {client.sources['China'] > 0 && (
+                                                    <div className="h-full bg-red-400" style={{ width: `${(client.sources['China'] / client.amount) * 100}%` }} title={`China: ${client.sources['China'].toLocaleString()}`}></div>
+                                                )}
+                                                {client.sources['Other'] > 0 && (
+                                                    <div className="h-full bg-yellow-400" style={{ width: `${(client.sources['Other'] / client.amount) * 100}%` }} title={`Other: ${client.sources['Other'].toLocaleString()}`}></div>
+                                                )}
+                                            </div>
+
+                                            <div className="mt-1 text-[10px] text-slate-400 flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity absolute top-full left-0 bg-white p-2 shadow-xl z-10 w-40 border rounded pointer-events-none">
+                                                 {client.sources['Warehouse'] > 0 && <span className="flex justify-between"><span>📦 倉庫</span> <span>{client.sources['Warehouse'].toLocaleString()}</span></span>}
+                                                 {client.sources['China'] > 0 && <span className="flex justify-between text-red-400 font-bold"><span>🇨🇳 中國</span> <span>{client.sources['China'].toLocaleString()}</span></span>}
+                                                 {client.sources['Other'] > 0 && <span className="flex justify-between text-yellow-600"><span>🔸 其他</span> <span>{client.sources['Other'].toLocaleString()}</span></span>}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+                
+                <div className="mt-12 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <h3 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
+                        <Edit3 className="w-5 h-5 text-blue-500" /> 手動輸入紀錄明細 (Manual Entries)
+                    </h3>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-slate-50 text-xs text-slate-500 font-bold border-b border-slate-100">
+                                <tr>
+                                    <th className="p-3">日期</th>
+                                    <th className="p-3">客戶</th>
+                                    <th className="p-3">櫃號</th>
+                                    <th className="p-3">來源</th>
+                                    <th className="p-3 text-right">金額 (THB)</th>
+                                    <th className="p-3">備註</th>
+                                    <th className="p-3 text-center">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {manualRevenueData.sort((a,b) => new Date(b.date) - new Date(a.date)).map(item => (
+                                    <tr key={item.id} className="hover:bg-slate-50">
+                                        <td className="p-3 font-mono text-slate-600">{item.date}</td>
+                                        <td className="p-3 font-bold text-slate-800">{item.client}</td>
+                                        <td className="p-3 text-slate-600"><span className="bg-slate-100 px-2 py-0.5 rounded text-xs">{item.cabinetNo || '-'}</span></td>
+                                        <td className="p-3">
+                                            {item.source === 'China' ? (
+                                                <span className="flex items-center gap-1 text-red-500 font-bold text-xs"><MapPin className="w-3 h-3" /> China</span>
+                                            ) : item.source === 'Warehouse' ? (
+                                                <span className="flex items-center gap-1 text-blue-500 font-bold text-xs"><Package className="w-3 h-3" /> Warehouse</span>
+                                            ) : (
+                                                <span className="text-slate-400 text-xs">{item.source || 'China'}</span>
+                                            )}
+                                        </td>
+                                        <td className="p-3 text-right font-mono text-emerald-600 font-bold">{item.amount.toLocaleString()}</td>
+                                        <td className="p-3 text-slate-400 text-xs">{item.note}</td>
+                                        <td className="p-3 text-center">
+                                            <button onClick={() => deleteManualRevenue(item.id)} className="text-red-300 hover:text-red-600 p-1 rounded hover:bg-red-50 transition-colors">
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {manualRevenueData.length === 0 && (
+                                    <tr><td colSpan="7" className="p-8 text-center text-slate-400">目前沒有手動輸入的紀錄</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {viewMode === 'preview' && (
+            <div className="py-10 bg-slate-200 min-h-screen">
+                <div className="max-w-[210mm] mx-auto mb-6 flex justify-between print:hidden">
+                    <button onClick={() => setViewMode('dashboard')} className="font-bold flex items-center gap-2"><ArrowLeft/>返回</button>
+                    <button onClick={() => window.print()} className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2"><Printer/>列印</button>
+                </div>
+                <div id="print-area">
+                    <InvoiceTemplate inv={(groupedInvoices[activeClient] || []).find(i => i.id === selectedInvoiceId)} />
+                </div>
+            </div>
+        )}
+
+        {viewMode === 'printAll' && <PrintAllView />}
+
+        {viewMode === 'masterTable' && <MasterTableView />}
+
+        {viewMode === 'dataManagement' && (
+             <div className="p-8 max-w-4xl mx-auto min-h-screen bg-slate-50 animate-in fade-in">
+                <h2 className="text-3xl font-black text-slate-800 flex items-center gap-3 mb-8">
+                    <Archive className="w-8 h-8 text-emerald-600" /> 資料來源管理
+                </h2>
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <table className="w-full text-left">
+                        <thead className="bg-slate-100 text-xs font-bold text-slate-600 border-b border-slate-200">
+                            <tr>
+                                <th className="p-4">來源檔案名稱 (Source)</th>
+                                <th className="p-4 text-center">資料筆數</th>
+                                <th className="p-4 text-right">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                             {[...new Set(masterData.map(d => d.source))].map(source => (
+                                 <tr key={source} className="hover:bg-red-50 group transition-colors">
+                                     <td className="p-4 font-mono text-sm font-bold text-slate-700">{source}</td>
+                                     <td className="p-4 text-center">
+                                         <span className="bg-slate-100 px-3 py-1 rounded-full text-xs font-black text-slate-600">{masterData.filter(d => d.source === source).length} 筆</span>
+                                     </td>
+                                     <td className="p-4 text-right">
+                                         <button onClick={() => deleteBatchBySource(source)} className="text-slate-400 hover:text-red-600 font-bold text-sm flex items-center gap-1 ml-auto transition-colors px-3 py-1 rounded hover:bg-red-100">
+                                             <Trash2 className="w-4 h-4" /> 刪除整批
+                                         </button>
+                                     </td>
+                                 </tr>
+                             ))}
+                        </tbody>
+                    </table>
+                </div>
+             </div>
+        )}
+        
+        {viewMode === 'settings' && (
+            <div className="max-w-md mx-auto space-y-6">
+                <div className="bg-white p-6 rounded-2xl shadow-sm border">
+                    <h3 className="font-black mb-4 flex items-center gap-2"><KeyRound className="text-purple-600"/> Gemini API Key</h3>
+                    <input type="password" value={userApiKey} onChange={e => { setUserApiKey(e.target.value); localStorage.setItem('everise_gemini_key', e.target.value); }} className="w-full border p-2 rounded bg-slate-50" placeholder="貼上 API Key"/>
+                </div>
+                <div className="bg-white p-6 rounded-2xl shadow-sm border">
+                    <h3 className="font-black mb-4 flex items-center gap-2"><RefreshCw className="text-blue-600"/> 重置櫃號設定</h3>
+                    <p className="text-xs text-slate-500 mb-4">如果您發現櫃號起始值沒有更新（例如仍是舊的），請點擊下方按鈕強制重置為系統最新的預設值。</p>
+                    <button onClick={resetConfigToDefaults} className="w-full bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-2 rounded-lg transition-colors">重置為最新預設值</button>
+                </div>
+            </div>
+        )}
+      </main>
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media print {
+          body * { visibility: hidden; }
+          #print-area, #print-area * { visibility: visible; }
+          #print-area { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; }
+          .bg-slate-200, .bg-slate-50, .shadow-xl, .bg-white { background: white !important; box-shadow: none !important; }
+          .print-page-break { page-break-after: always !important; break-after: page !important; min-height: 297mm; }
+          .print\\:hidden, nav, button { display: none !important; }
+          @page { size: A4; margin: 0; }
+        }
+        .font-tnr { font-family: 'Times New Roman', Times, serif; }
+      `}} />
+    </div>
   );
 };
 
