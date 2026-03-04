@@ -174,7 +174,7 @@ const SaPreviewModal = ({ show, onClose, client, orders }) => {
 
 const App = () => {
   // --- 請在此填入您的 AI Key ---
-  const apiKey = "AIzaSyD6v4BGNqEzJwAUlSmijajj_jUU715wnXc"; 
+  const apiKey = "AIzaSyD6v4BGNqEzJwAUlSmijajj_jUU715wnXc";  
 
   // --- 🚨 重要：請將您 Firebase 後台的整包 Config 貼在這裡 🚨 ---
   const firebaseConfig = {
