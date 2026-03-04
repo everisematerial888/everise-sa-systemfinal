@@ -54,7 +54,7 @@ const DEFAULT_CLIENT_CONFIG = {
   "DP": { startNo: 424, prefix: "DP" },
   "HEC": { startNo: 22, prefix: "HEC" },
   "HRR": { startNo: 97, prefix: "HRR" },
-  "PAT": { startNo: 30, prefix: "PAT" },
+  "PAT": { startNo: 29, prefix: "PAT" },
   "PCR": { startNo: 251, prefix: "PCR" },
   "PV": { startNo: 211, prefix: "PV" },
   "ROMA": { startNo: 11, prefix: "ROMA" },
