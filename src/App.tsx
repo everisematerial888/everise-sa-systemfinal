@@ -40,7 +40,7 @@ const firebaseConfig = {
   appId: "1:736271192466:web:1517c3d40e3e61d1c1b14b",
   measurementId: "G-1X3X3FWSM7"
 };
-const apiKeyDefault = ""; 
+const apiKeyDefault = "AIzaSyD6v4BGNqEzJwAUlSmijajj_jUU715wnXc"; 
 
 // --- 預設的客戶櫃號設定 ---
 const DEFAULT_CLIENT_CONFIG = {
