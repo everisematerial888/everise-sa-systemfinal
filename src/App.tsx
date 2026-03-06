@@ -43,7 +43,7 @@ const firebaseConfig = {
 const apiKeyDefault = "AIzaSyD6v4BGNqEzJwAUlSmijajj_jUU715wnXc"; 
 
 // --- 預設的客戶櫃號設定 ---
-const DEFAULT_CLIENT_CONFIG = {
+const DEFAULT_CLIENT_CONFIG = { 
   "AP": { startNo: 955, prefix: "AP" },
   "APS": { startNo: 860, prefix: "APS" },
   "CCHHH": { startNo: 138, prefix: "CCHHH" },
