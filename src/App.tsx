@@ -40,12 +40,12 @@ const firebaseConfig = {
   appId: "1:736271192466:web:1517c3d40e3e61d1c1b14b",
   measurementId: "G-1X3X3FWSM7"
 };
-const apiKeyDefault = "AIzaSyD6v4BGNqEzJwAUlSmijajj_jUU715wnXc"; 
+const apiKeyDefault = ""; 
 
 // --- 預設的客戶櫃號設定 ---
 const DEFAULT_CLIENT_CONFIG = {
   "AP": { startNo: 955, prefix: "AP" },
-  "APS": { startNo: 860, prefix: "APS" },
+  "APS": { startNo: 858, prefix: "APS" },
   "CCHHH": { startNo: 138, prefix: "CCHHH" },
   "CH": { startNo: 276, prefix: "CH" },
   "CL": { startNo: 300, prefix: "CL" },
@@ -54,7 +54,7 @@ const DEFAULT_CLIENT_CONFIG = {
   "DP": { startNo: 424, prefix: "DP" },
   "HEC": { startNo: 22, prefix: "HEC" },
   "HRR": { startNo: 97, prefix: "HRR" },
-  "PAT": { startNo: 29, prefix: "PAT" },
+  "PAT": { startNo: 30, prefix: "PAT" },
   "PCR": { startNo: 251, prefix: "PCR" },
   "PV": { startNo: 211, prefix: "PV" },
   "ROMA": { startNo: 11, prefix: "ROMA" },
@@ -254,7 +254,6 @@ const App = () => {
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
-  const appId = 'default-app-id'; 
 
   // --- State ---
   const [user, setUser] = useState(null);
@@ -293,8 +292,9 @@ const App = () => {
     { id: 6, keyword: "CC", vendor: "南泰" }
   ]);
 
-  // --- Auth & Data Sync ---
+  // --- Auth & Data Sync (徹底升級為全公司共用空間) ---
   useEffect(() => {
+    // 依然保留匿名登入作為 Firebase 連線基礎
     signInAnonymously(auth).catch(err => console.error("Auth Error:", err));
     return onAuthStateChanged(auth, u => setUser(u));
   }, [auth]);
@@ -302,39 +302,41 @@ const App = () => {
   useEffect(() => {
     if (!user) return;
     setSyncStatus('syncing');
-    const masterRef = collection(db, 'artifacts', appId, 'users', user.uid, 'master_data');
+    
+    // 🔥【核心修改】移除 user.uid，徹底將資料庫改為 Everise 公司專屬共用空間
+    const masterRef = collection(db, 'everise_system', 'shared', 'master_data');
     const unsubMaster = onSnapshot(masterRef, (snap) => {
       setMasterData(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setSyncStatus('idle');
     });
 
-    const settingsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'config');
+    const settingsRef = doc(db, 'everise_system', 'shared', 'settings', 'config');
     const unsubSettings = onSnapshot(settingsRef, (snap) => {
       if (snap.exists() && snap.data().clientConfig) {
         setClientConfig(snap.data().clientConfig);
       }
     });
 
-    const revRef = collection(db, 'artifacts', appId, 'users', user.uid, 'manual_revenue');
+    const revRef = collection(db, 'everise_system', 'shared', 'manual_revenue');
     const unsubRev = onSnapshot(revRef, (snap) => {
         setManualRevenueData(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
     return () => { unsubMaster(); unsubSettings(); unsubRev(); };
-  }, [user, db, appId]);
+  }, [user, db]);
 
   // --- Actions ---
   const saveMasterDataRow = async (row) => {
     const { id, ...data } = row;
-    await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'master_data', id), data);
+    await setDoc(doc(db, 'everise_system', 'shared', 'master_data', id), data);
   };
 
   const updateMasterDataRow = async (id, updates) => {
-    await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'master_data', id), updates);
+    await updateDoc(doc(db, 'everise_system', 'shared', 'master_data', id), updates);
   };
 
   const deleteMasterDataRow = async (id) => {
-    await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'master_data', id));
+    await deleteDoc(doc(db, 'everise_system', 'shared', 'master_data', id));
   };
 
   const deleteBatchBySource = async (sourceName) => {
@@ -344,7 +346,7 @@ const App = () => {
       for (let i = 0; i < targets.length; i += 400) {
           const batch = writeBatch(db);
           targets.slice(i, i + 400).forEach(d => {
-              batch.delete(doc(db, 'artifacts', appId, 'users', user.uid, 'master_data', d.id));
+              batch.delete(doc(db, 'everise_system', 'shared', 'master_data', d.id));
           });
           await batch.commit();
       }
@@ -352,17 +354,17 @@ const App = () => {
   };
 
   const addManualRevenue = async (data) => {
-      await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'manual_revenue'), { ...data, timestamp: Date.now() });
+      await addDoc(collection(db, 'everise_system', 'shared', 'manual_revenue'), { ...data, timestamp: Date.now() });
       setShowRevenueModal(false);
   };
 
   const deleteManualRevenue = async (id) => {
-      if(window.confirm("確定刪除此筆營收紀錄？")) await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'manual_revenue', id));
+      if(window.confirm("確定刪除此筆營收紀錄？")) await deleteDoc(doc(db, 'everise_system', 'shared', 'manual_revenue', id));
   };
 
   const resetConfigToDefaults = async () => {
     if (window.confirm("確定要將所有客戶的櫃號起始值重置為系統預設值嗎？\n(這將根據您提供的 2026 最新數據進行重置)")) {
-      await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'config'), { clientConfig: DEFAULT_CLIENT_CONFIG }, { merge: true });
+      await setDoc(doc(db, 'everise_system', 'shared', 'settings', 'config'), { clientConfig: DEFAULT_CLIENT_CONFIG }, { merge: true });
       alert("重置完成！");
     }
   };
@@ -417,7 +419,7 @@ const App = () => {
                  const [c, n] = r.split(',');
                  if (c && n) newConfig[c.toUpperCase().trim()] = { startNo: parseInt(n) || 1, prefix: c.toUpperCase().trim() };
              });
-             await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'config'), { clientConfig: newConfig }, { merge: true });
+             await setDoc(doc(db, 'everise_system', 'shared', 'settings', 'config'), { clientConfig: newConfig }, { merge: true });
              return;
         }
 
@@ -719,7 +721,7 @@ const App = () => {
               <button 
                   onClick={downloadBatchPdfs} 
                   disabled={isDownloadingPdf} 
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors disabled:opacity-50"
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors disabled:opacity-50 shadow-sm"
               >
                   {isDownloadingPdf ? <Loader2 className="w-3 h-3 animate-spin"/> : <Download className="w-3 h-3"/>}
                   {isDownloadingPdf ? '載入產生中...' : '批次下載當前 SA (PDF)'}
@@ -883,7 +885,7 @@ const App = () => {
             } else {
                 newConfig[client].startNo = nextStart;
             }
-            await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'config'), { clientConfig: newConfig }, { merge: true });
+            await setDoc(doc(db, 'everise_system', 'shared', 'settings', 'config'), { clientConfig: newConfig }, { merge: true });
         }
     };
 
@@ -895,7 +897,7 @@ const App = () => {
             const newConfig = { ...clientConfig };
             if (!newConfig[client]) newConfig[client] = { startNo: newNo, prefix: client };
             else newConfig[client].startNo = newNo;
-            await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'config'), { clientConfig: newConfig }, { merge: true });
+            await setDoc(doc(db, 'everise_system', 'shared', 'settings', 'config'), { clientConfig: newConfig }, { merge: true });
         }
     };
 
