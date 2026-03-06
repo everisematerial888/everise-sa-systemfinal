@@ -45,7 +45,7 @@ const apiKeyDefault = "AIzaSyD6v4BGNqEzJwAUlSmijajj_jUU715wnXc";
 // --- 預設的客戶櫃號設定 ---
 const DEFAULT_CLIENT_CONFIG = {
   "AP": { startNo: 955, prefix: "AP" },
-  "APS": { startNo: 858, prefix: "APS" },
+  "APS": { startNo: 860, prefix: "APS" },
   "CCHHH": { startNo: 138, prefix: "CCHHH" },
   "CH": { startNo: 276, prefix: "CH" },
   "CL": { startNo: 300, prefix: "CL" },
@@ -54,7 +54,7 @@ const DEFAULT_CLIENT_CONFIG = {
   "DP": { startNo: 424, prefix: "DP" },
   "HEC": { startNo: 22, prefix: "HEC" },
   "HRR": { startNo: 97, prefix: "HRR" },
-  "PAT": { startNo: 30, prefix: "PAT" },
+  "PAT": { startNo: 29, prefix: "PAT" },
   "PCR": { startNo: 251, prefix: "PCR" },
   "PV": { startNo: 211, prefix: "PV" },
   "ROMA": { startNo: 11, prefix: "ROMA" },
@@ -68,7 +68,7 @@ const DEFAULT_CLIENT_CONFIG = {
   "WP": { startNo: 274, prefix: "WP" }
 };
 
-// --- 智能數量解析大腦 (Smart Quantity Parsing) ---
+// --- 智能數量解析大腦 ---
 const parseQuantity = (rawQtyStr, productName) => {
   if (!rawQtyStr) return { display: '', value: 0 };
   const str = String(rawQtyStr).trim().toUpperCase();
@@ -280,6 +280,9 @@ const App = () => {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [showRevenueModal, setShowRevenueModal] = useState(false); 
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  
+  // 新增上傳狀態，避免畫面假死
+  const [isUploading, setIsUploading] = useState(false);
 
   const [clientConfig, setClientConfig] = useState(DEFAULT_CLIENT_CONFIG);
 
@@ -292,9 +295,8 @@ const App = () => {
     { id: 6, keyword: "CC", vendor: "南泰" }
   ]);
 
-  // --- Auth & Data Sync (徹底升級為全公司共用空間) ---
+  // --- Auth & Data Sync ---
   useEffect(() => {
-    // 依然保留匿名登入作為 Firebase 連線基礎
     signInAnonymously(auth).catch(err => console.error("Auth Error:", err));
     return onAuthStateChanged(auth, u => setUser(u));
   }, [auth]);
@@ -303,11 +305,13 @@ const App = () => {
     if (!user) return;
     setSyncStatus('syncing');
     
-    // 🔥【核心修改】移除 user.uid，徹底將資料庫改為 Everise 公司專屬共用空間
+    // 指向全局共用的資料庫路徑
     const masterRef = collection(db, 'everise_system', 'shared', 'master_data');
     const unsubMaster = onSnapshot(masterRef, (snap) => {
       setMasterData(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setSyncStatus('idle');
+    }, (error) => {
+        console.warn("Database Read Blocked by Rules:", error);
     });
 
     const settingsRef = doc(db, 'everise_system', 'shared', 'settings', 'config');
@@ -342,30 +346,44 @@ const App = () => {
   const deleteBatchBySource = async (sourceName) => {
       if (!window.confirm(`警告：確定刪除來自 "${sourceName}" 的所有資料？`)) return;
       setSyncStatus('syncing');
-      const targets = masterData.filter(d => d.source === sourceName);
-      for (let i = 0; i < targets.length; i += 400) {
-          const batch = writeBatch(db);
-          targets.slice(i, i + 400).forEach(d => {
-              batch.delete(doc(db, 'everise_system', 'shared', 'master_data', d.id));
-          });
-          await batch.commit();
+      try {
+          const targets = masterData.filter(d => d.source === sourceName);
+          for (let i = 0; i < targets.length; i += 400) {
+              const batch = writeBatch(db);
+              targets.slice(i, i + 400).forEach(d => {
+                  batch.delete(doc(db, 'everise_system', 'shared', 'master_data', d.id));
+              });
+              await batch.commit();
+          }
+      } catch(e) {
+          alert('刪除失敗，請檢查權限設定！錯誤：' + e.message);
       }
       setSyncStatus('idle');
   };
 
   const addManualRevenue = async (data) => {
-      await addDoc(collection(db, 'everise_system', 'shared', 'manual_revenue'), { ...data, timestamp: Date.now() });
-      setShowRevenueModal(false);
+      try {
+          await addDoc(collection(db, 'everise_system', 'shared', 'manual_revenue'), { ...data, timestamp: Date.now() });
+          setShowRevenueModal(false);
+      } catch(e) {
+          alert('寫入失敗，請檢查 Firebase 權限！錯誤：' + e.message);
+      }
   };
 
   const deleteManualRevenue = async (id) => {
-      if(window.confirm("確定刪除此筆營收紀錄？")) await deleteDoc(doc(db, 'everise_system', 'shared', 'manual_revenue', id));
+      if(window.confirm("確定刪除此筆營收紀錄？")) {
+          try {
+              await deleteDoc(doc(db, 'everise_system', 'shared', 'manual_revenue', id));
+          } catch(e) { alert('刪除失敗：' + e.message); }
+      }
   };
 
   const resetConfigToDefaults = async () => {
-    if (window.confirm("確定要將所有客戶的櫃號起始值重置為系統預設值嗎？\n(這將根據您提供的 2026 最新數據進行重置)")) {
-      await setDoc(doc(db, 'everise_system', 'shared', 'settings', 'config'), { clientConfig: DEFAULT_CLIENT_CONFIG }, { merge: true });
-      alert("重置完成！");
+    if (window.confirm("確定要將所有客戶的櫃號起始值重置為系統預設值嗎？")) {
+      try {
+          await setDoc(doc(db, 'everise_system', 'shared', 'settings', 'config'), { clientConfig: DEFAULT_CLIENT_CONFIG }, { merge: true });
+          alert("重置完成！");
+      } catch(e) { alert('重置失敗：' + e.message); }
     }
   };
 
@@ -392,102 +410,123 @@ const App = () => {
         updates.shippedQty = parsed.value;
     }
 
-    updateMasterDataRow(editingId, updates);
+    try {
+        updateMasterDataRow(editingId, updates);
+    } catch(e) { alert('儲存失敗：' + e.message); }
+    
     setEditingId(null);
     editValues.current = {};
   };
 
   const handleDelete = (id) => {
       if(window.confirm("確定要永久刪除此筆資料嗎？")) {
-          deleteMasterDataRow(id);
+          deleteMasterDataRow(id).catch(e => alert('刪除失敗：'+e.message));
       }
   }
 
-  // --- CSV Import Logic ---
-  const handleFileUpload = (e) => {
+  // --- CSV Import Logic (加入防呆與錯誤攔截) ---
+  const handleFileUpload = async (e) => {
     const files = Array.from(e.target.files);
-    files.forEach(file => {
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        const rows = event.target.result.split(/\r?\n/).filter(r => r.trim());
-        if (rows.length < 1) return;
-        const headers = rows[0].split(',').map(h => h.trim().toLowerCase());
-        
-        if (headers.includes('client') && headers.includes('number')) {
-             const newConfig = { ...clientConfig };
-             rows.slice(1).forEach(r => {
-                 const [c, n] = r.split(',');
-                 if (c && n) newConfig[c.toUpperCase().trim()] = { startNo: parseInt(n) || 1, prefix: c.toUpperCase().trim() };
-             });
-             await setDoc(doc(db, 'everise_system', 'shared', 'settings', 'config'), { clientConfig: newConfig }, { merge: true });
-             return;
-        }
+    if (files.length === 0) return;
+    
+    setIsUploading(true);
 
-        const isChina = file.name.toLowerCase().includes('china');
-        const origin = isChina ? 'China' : 'ER';
-
-        const getIdx = (keys) => headers.findIndex(h => keys.some(k => h.includes(k)));
-        const idx = {
-            date: getIdx(['date', '日期']), client: getIdx(['client', '客戶']),
-            product: getIdx(['product', '品名', 'spec']), color: getIdx(['color', '顏色']),
-            shipped: getIdx(['quantity', '數量', '出貨']), price: getIdx(['price', '單價']),
-            cabinet: getIdx(['cabinet', '櫃號']), order: getIdx(['order', '訂單']),
-            status: getIdx(['status', '結案']), note: getIdx(['note', '備註'])
-        };
-
-        const promises = rows.slice(1).map((row, rIdx) => {
-            const cols = [];
-            let cur = '';
-            let inQuote = false;
-            for (let i = 0; i < row.length; i++) {
-                let char = row[i];
-                if (char === '"') inQuote = !inQuote;
-                else if (char === ',' && !inQuote) {
-                    cols.push(cur.trim());
-                    cur = '';
-                } else cur += char;
-            }
-            cols.push(cur.trim());
-
-            if (cols.length < 3) return null;
-
-            const productName = cols[idx.product]?.replace(/"/g, '') || '';
-            const matched = vendorRules.find(rule => productName.toUpperCase().includes(rule.keyword));
-            
-            const parsedQty = parseQuantity(cols[idx.shipped], productName);
-            
-            return saveMasterDataRow({
-                id: `${file.name}-${rIdx}-${Date.now()}`,
-                date: cols[idx.date] || '',
-                client: (cols[idx.client] || 'UNKNOWN').toUpperCase().replace(/"/g, ''),
-                product: productName,
-                color: (cols[idx.color] || '').replace(/"/g, ''),
-                shippedQty: parsedQty.value,
-                shippedDisplay: parsedQty.display,
-                price: parseFloat(cols[idx.price]?.replace(/[^\d.-]/g, '')) || 0,
-                vendor: matched ? matched.vendor : "待查",
-                cabinetNo: cols[idx.cabinet] ? cols[idx.cabinet].replace(/"/g, '') : '',
-                orderNo: cols[idx.order] || 'N/A',
-                status: cols[idx.status] || '',
-                note: cols[idx.note] || '',
-                source: file.name,
-                origin: origin,
-                timestamp: Date.now()
+    try {
+        for (const file of files) {
+            const text = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (event) => resolve(event.target.result);
+                reader.onerror = (error) => reject(error);
+                reader.readAsText(file);
             });
-        });
-        await Promise.all(promises.filter(p => p !== null));
+
+            const rows = text.split(/\r?\n/).filter(r => r.trim());
+            if (rows.length < 1) continue;
+            const headers = rows[0].split(',').map(h => h.trim().toLowerCase());
+            
+            if (headers.includes('client') && headers.includes('number')) {
+                 const newConfig = { ...clientConfig };
+                 rows.slice(1).forEach(r => {
+                     const [c, n] = r.split(',');
+                     if (c && n) newConfig[c.toUpperCase().trim()] = { startNo: parseInt(n) || 1, prefix: c.toUpperCase().trim() };
+                 });
+                 await setDoc(doc(db, 'everise_system', 'shared', 'settings', 'config'), { clientConfig: newConfig }, { merge: true });
+                 continue;
+            }
+
+            const isChina = file.name.toLowerCase().includes('china');
+            const origin = isChina ? 'China' : 'ER';
+
+            const getIdx = (keys) => headers.findIndex(h => keys.some(k => h.includes(k)));
+            const idx = {
+                date: getIdx(['date', '日期']), client: getIdx(['client', '客戶']),
+                product: getIdx(['product', '品名', 'spec']), color: getIdx(['color', '顏色']),
+                shipped: getIdx(['quantity', '數量', '出貨']), price: getIdx(['price', '單價']),
+                cabinet: getIdx(['cabinet', '櫃號']), order: getIdx(['order', '訂單']),
+                status: getIdx(['status', '結案']), note: getIdx(['note', '備註'])
+            };
+
+            const promises = rows.slice(1).map((row, rIdx) => {
+                const cols = [];
+                let cur = '';
+                let inQuote = false;
+                for (let i = 0; i < row.length; i++) {
+                    let char = row[i];
+                    if (char === '"') inQuote = !inQuote;
+                    else if (char === ',' && !inQuote) {
+                        cols.push(cur.trim());
+                        cur = '';
+                    } else cur += char;
+                }
+                cols.push(cur.trim());
+
+                if (cols.length < 3) return null;
+
+                const productName = cols[idx.product]?.replace(/"/g, '') || '';
+                const matched = vendorRules.find(rule => productName.toUpperCase().includes(rule.keyword));
+                
+                const parsedQty = parseQuantity(cols[idx.shipped], productName);
+                
+                return saveMasterDataRow({
+                    id: `${file.name}-${rIdx}-${Date.now()}`,
+                    date: cols[idx.date] || '',
+                    client: (cols[idx.client] || 'UNKNOWN').toUpperCase().replace(/"/g, ''),
+                    product: productName,
+                    color: (cols[idx.color] || '').replace(/"/g, ''),
+                    shippedQty: parsedQty.value,
+                    shippedDisplay: parsedQty.display,
+                    price: parseFloat(cols[idx.price]?.replace(/[^\d.-]/g, '')) || 0,
+                    vendor: matched ? matched.vendor : "待查",
+                    cabinetNo: cols[idx.cabinet] ? cols[idx.cabinet].replace(/"/g, '') : '',
+                    orderNo: cols[idx.order] || 'N/A',
+                    status: cols[idx.status] || '',
+                    note: cols[idx.note] || '',
+                    source: file.name,
+                    origin: origin,
+                    timestamp: Date.now()
+                });
+            });
+            
+            // 這裡如果 Firebase 擋掉權限，會直接拋出錯誤到 Catch
+            await Promise.all(promises.filter(p => p !== null));
+        }
+        
+        alert("✅ 上傳成功！");
         setViewMode('dashboard');
-      };
-      reader.readAsText(file);
-    });
-    e.target.value = ''; 
+        
+    } catch (error) {
+        console.error("Upload error:", error);
+        alert(`❌ 上傳失敗！\n\n原因可能是 Firebase 資料庫權限未開啟。\n請至 Firebase 後台修改 Security Rules 為 allow read, write: if true;\n\n錯誤代碼：${error.message}`);
+    } finally {
+        setIsUploading(false);
+        e.target.value = ''; 
+    }
   };
 
   // --- Computed Base Lists ---
   const sortedClients = useMemo(() => [...new Set(masterData.map(d => d.client))].sort(), [masterData]);
   const availableMonths = useMemo(() => [...new Set(masterData.map(d => d.date?.substring(0, 7)))].filter(Boolean).sort().reverse(), [masterData]);
 
-  // 第一步：基於「所有資料」生成完整的櫃號與 SA，確保編號邏輯不斷層 (包含無記憶客戶的 001 邏輯)
   const allGroupedInvoices = useMemo(() => {
     const res = {};
     sortedClients.forEach(c => {
@@ -497,11 +536,9 @@ const App = () => {
         res[c] = dates.map((date, idx) => {
             const items = rows.filter(r => r.date === date);
             const conf = clientConfig[c] || { startNo: 1, prefix: c };
-            // 無記憶新客人從 001 補零起跳
             const paddedNo = String(conf.startNo + idx).padStart(3, '0');
             const origin = items[0]?.origin || 'ER'; 
             
-            // 全面套用四捨五入進位
             const total = items.reduce((s, i) => s + Math.round(i.shippedQty * Math.round(i.price)), 0);
             
             return { 
@@ -518,7 +555,6 @@ const App = () => {
     return res;
   }, [masterData, clientConfig, sortedClients]);
 
-  // 第二步：基於「全局篩選器」過濾出當前要顯示的 SA 群組
   const displayedGroupedInvoices = useMemo(() => {
       const res = {};
       Object.keys(allGroupedInvoices).forEach(client => {
@@ -533,7 +569,6 @@ const App = () => {
       return res;
   }, [allGroupedInvoices, filterMonth, filterOrigin, activeMasterClient]);
 
-  // 過濾用於 Table 的原始資料
   const filteredMasterData = useMemo(() => {
     let d = masterData;
     if (activeMasterClient !== 'ALL') d = d.filter(x => x.client === activeMasterClient);
@@ -579,7 +614,6 @@ const App = () => {
               const element = document.getElementById(`invoice-capture-${inv.id}`);
               if (!element) continue;
 
-              // 中國直出自動命名後綴 CN
               const filename = inv.origin === 'China' ? `${inv.cabinetNo}CN.pdf` : `${inv.cabinetNo}.pdf`;
 
               await html2pdf().set({
@@ -590,7 +624,6 @@ const App = () => {
                   jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
               }).from(element).save();
 
-              // 延遲 800ms 防止瀏覽器崩潰或阻擋下載
               await new Promise(resolve => setTimeout(resolve, 800)); 
           }
       } catch (error) {
@@ -632,7 +665,6 @@ const App = () => {
 
     masterData.forEach(d => {
         const origin = d.origin || 'Warehouse'; 
-        // 營收同步強制四捨五入
         const roundedAmount = Math.round(d.shippedQty * Math.round(d.price));
         process(d.date, d.client, roundedAmount, origin);
     });
@@ -689,9 +721,11 @@ const App = () => {
           </button>
           <button onClick={() => setShowAiModal(true)} className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg font-bold text-xs flex items-center gap-2 transition-colors"><Sparkles className="w-4 h-4" /> AI 分析</button>
           <button onClick={() => setViewMode('settings')} className="p-2 text-slate-400 hover:text-white"><Settings className="w-5 h-5" /></button>
-          <label className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg cursor-pointer font-bold text-xs flex items-center gap-2 shadow-sm">
-            <Upload className="w-4 h-4" /> 匯入 CSV
-            <input type="file" accept=".csv" multiple className="hidden" onChange={handleFileUpload} />
+          
+          <label className={`bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg cursor-pointer font-bold text-xs flex items-center gap-2 shadow-sm transition-all ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+            {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+            {isUploading ? '處理中...' : '匯入 CSV'}
+            <input type="file" accept=".csv" multiple className="hidden" onChange={handleFileUpload} disabled={isUploading} />
           </label>
         </div>
       </div>
