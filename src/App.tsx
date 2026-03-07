@@ -42,6 +42,28 @@ const DEFAULT_CLIENT_CONFIG = {
   "WL": { startNo: 285, prefix: "WL" }, "WP": { startNo: 274, prefix: "WP" }
 };
 
+// 企業級 CSV 專業解析器 (完美處理千分位逗號與換行)
+const parseCSV = (str) => {
+    const arr = []; let quote = false; let col = ''; let row = [];
+    for (let c = 0; c < str.length; c++) {
+        let cc = str[c], nc = str[c+1];
+        if (cc === '"' && quote && nc === '"') { col += cc; c++; continue; }
+        if (cc === '"') { quote = !quote; continue; }
+        if (cc === ',' && !quote) { row.push(col.trim()); col = ''; continue; }
+        if (cc === '\r' && !quote) continue;
+        if (cc === '\n' && !quote) { row.push(col.trim()); arr.push(row); col = ''; row = []; continue; }
+        col += cc;
+    }
+    if (col !== '' || row.length > 0) { row.push(col.trim()); arr.push(row); }
+    return arr.filter(r => r.some(x => x !== ''));
+};
+
+const parseNum = (val) => {
+    if (!val) return 0;
+    const n = parseFloat(String(val).replace(/,/g, ''));
+    return isNaN(n) ? 0 : n;
+};
+
 const parseQuantity = (rawQtyStr, productName) => {
   if (!rawQtyStr) return { display: '', value: 0 };
   const str = String(rawQtyStr).trim().toUpperCase();
@@ -156,14 +178,14 @@ const App = () => {
         let allParsedRows = [];
         for (const file of files) {
             const text = await new Promise((resolve) => { const reader = new FileReader(); reader.onload = (ev) => resolve(ev.target.result); reader.readAsText(file); });
-            const rows = text.split(/\r?\n/).filter(r => r.trim());
+            const rows = parseCSV(text);
             if (rows.length < 1) continue;
-            const headers = rows[0].split(',').map(h => h.trim().toLowerCase());
+            const headers = rows[0].map(h => String(h).toLowerCase());
             
             if (headers.includes('client') && headers.includes('number')) {
                  const newConfig = { ...clientConfig };
-                 rows.slice(1).forEach(r => {
-                     const [c, n] = r.split(',');
+                 rows.slice(1).forEach(cols => {
+                     const c = cols[0], n = cols[1];
                      if (c && n) newConfig[c.toUpperCase().trim()] = { startNo: parseInt(n) || 1, prefix: c.toUpperCase().trim() };
                  });
                  await updateConfig('clientConfig', newConfig); continue;
@@ -177,16 +199,8 @@ const App = () => {
                 cabinet: getIdx(['cabinet', '櫃號']), order: getIdx(['order', '訂單'])
             };
 
-            rows.slice(1).forEach((row, rIdx) => {
-                const cols = []; let cur = ''; let inQuote = false;
-                for (let i = 0; i < row.length; i++) {
-                    if (row[i] === '"') inQuote = !inQuote;
-                    else if (row[i] === ',' && !inQuote) { cols.push(cur.trim()); cur = ''; } 
-                    else cur += row[i];
-                }
-                cols.push(cur.trim());
+            rows.slice(1).forEach((cols, rIdx) => {
                 if (cols.length < 3) return;
-
                 let rawProduct = cols[idx.product]?.replace(/"/g, '').toUpperCase().trim() || '';
                 let rawColor = cols[idx.color]?.replace(/"/g, '').trim() || '';
                 const parsedQty = parseQuantity(cols[idx.shipped], rawProduct);
@@ -200,7 +214,7 @@ const App = () => {
                     _rawProduct: rawProduct, _rawColor: rawColor, id: `${file.name}-${rIdx}-${Date.now()}`,
                     date: cols[idx.date] || '', client: (cols[idx.client] || 'UNKNOWN').toUpperCase().replace(/"/g, ''),
                     shippedQty: parsedQty.value, shippedDisplay: parsedQty.display,
-                    price: parseFloat(cols[idx.price]?.replace(/[^\d.-]/g, '')) || 0,
+                    price: parseNum(cols[idx.price]),
                     cabinetNo: cols[idx.cabinet] ? cols[idx.cabinet].replace(/"/g, '') : '', orderNo: cols[idx.order] || 'N/A', 
                     status: '', note: '', source: file.name, origin: origin, timestamp: Date.now()
                 });
@@ -233,8 +247,8 @@ const App = () => {
   const finalizeUpload = async (rowsToSave, newMappings) => {
       const batch = writeBatch(db);
       rowsToSave.forEach(row => {
-          if(!row.product) row.product = row._rawProduct;
-          if(!row.color) row.color = row._rawColor;
+          if(!row.product) row.product = row._rawProduct || 'Unknown';
+          if(!row.color) row.color = row._rawColor || '-';
           const docData = {...row}; delete docData._rawProduct; delete docData._rawColor;
           batch.set(doc(db, 'everise_system', 'shared', 'master_data', row.id), docData);
       });
@@ -248,18 +262,17 @@ const App = () => {
       const file = e.target.files[0]; if (!file) return;
       try {
           const text = await new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => resolve(e.target.result); reader.readAsText(file); });
-          const rows = text.split(/\r?\n/).filter(r => r.trim());
-          const headers = rows[0].split(',').map(h => h.trim().toLowerCase());
+          const rows = parseCSV(text);
+          const headers = rows[0].map(h => String(h).toLowerCase());
           const getIdx = (keys) => headers.findIndex(h => keys.some(k => h.includes(k)));
           const idx = { date: getIdx(['date', '日期']), product: getIdx(['product', '品名']), color: getIdx(['color', '顏色']), qty: getIdx(['quantity', '數量']), note: getIdx(['note', '備註']) };
           if (idx.product === -1 || idx.qty === -1) throw new Error("缺少標題：品名、數量");
           const batch = writeBatch(db);
-          rows.slice(1).forEach((rowStr) => {
-              const cols = rowStr.split(',').map(c => c.trim().replace(/"/g, ''));
-              if (!cols[idx.product]) return;
+          rows.slice(1).forEach((cols) => {
+              if (cols.length < 2 || !cols[idx.product]) return;
               batch.set(doc(collection(db, 'everise_system', 'shared', 'restock_data')), {
-                  date: cols[idx.date] || new Date().toISOString().split('T')[0], product: cols[idx.product].toUpperCase(), color: cols[idx.color] || '',
-                  amount: parseInt(cols[idx.qty]) || 0, note: cols[idx.note] || '整櫃匯入', timestamp: Date.now()
+                  date: cols[idx.date] || new Date().toISOString().split('T')[0], product: String(cols[idx.product]).toUpperCase(), color: cols[idx.color] || '',
+                  amount: parseNum(cols[idx.qty]), note: cols[idx.note] || '整櫃匯入', timestamp: Date.now()
               });
           });
           await batch.commit(); alert("✅ 整櫃進貨匯入完成！");
@@ -267,70 +280,68 @@ const App = () => {
       e.target.value = '';
   };
 
-  // --- 🌟 更新：支援「2026年初始數量」的智慧讀取 ---
   const handleInventoryBaseUpload = async (e) => {
       const file = e.target.files[0]; if (!file) return;
       if (!window.confirm("匯入新期初總表會覆蓋計算基準，確定？")) return;
       setIsUploadingBase(true);
       try {
           const text = await new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => resolve(e.target.result); reader.readAsText(file); });
-          const rows = text.split(/\r?\n/).filter(r => r.trim());
-          const headers = rows[0].split(',').map(h => h.trim());
-          const getIdx = (keywords) => headers.findIndex(h => keywords.some(k => h.includes(k)));
+          const rows = parseCSV(text);
+          if(rows.length < 2) throw new Error("檔案內容不足或格式錯誤");
+          const headers = rows[0];
+          const getIdx = (keywords) => headers.findIndex(h => keywords.some(k => String(h).includes(k)));
           
           const idx = {
               product: getIdx(['品名', 'Product']), color: getIdx(['顏色', 'Color']),
               shipped2025: getIdx(['2025年出貨', '2025年的出貨', '2025']), 
               shipped2026: getIdx(['2026年出貨', '2026出貨', '2026年的出貨']),
               stock2026: getIdx(['2026年庫存', '2026庫存', '2026年的庫存']), 
-              initialStock2026: getIdx(['2026年初始數量', '初始數量', '初始']), // 讀取你新增的欄位
+              initialStock2026: getIdx(['2026年初始數量', '初始數量', '初始']), 
               restockTarget: getIdx(['安全水位', '補貨參考', '低於此數字']), 
               suggestedRestock: getIdx(['建議補貨量', '補貨量'])
           };
-          if (idx.product === -1 || idx.stock2026 === -1) throw new Error("標題缺少：品名、2026年庫存");
+          if (idx.product === -1 || idx.stock2026 === -1) throw new Error("標題缺少：品名、2026年庫存數量");
 
           const batchDelete = writeBatch(db);
           inventoryMaster.forEach(inv => batchDelete.delete(doc(db, 'everise_system', 'shared', 'inventory_master', inv.id)));
           await batchDelete.commit();
 
           const batchInsert = writeBatch(db);
-          rows.slice(1).forEach((rowStr) => {
-              const cols = rowStr.split(',').map(c => c.trim().replace(/"/g, ''));
-              if (cols.length < 3 || !cols[idx.product]) return;
+          rows.slice(1).forEach((cols) => {
+              if (cols.length < 2 || !cols[idx.product]) return;
               
-              const s2026 = parseInt(cols[idx.shipped2026]) || 0;
-              const stock2026 = parseInt(cols[idx.stock2026]) || 0;
+              const s2026 = parseNum(cols[idx.shipped2026]);
+              const stock2026 = parseNum(cols[idx.stock2026]);
               
-              // 智能推算邏輯：優先讀取你填的初始數量，如果是空白的，系統自動幫你相加推算
               let calculatedInitialStock = 0;
-              if (idx.initialStock2026 !== -1 && cols[idx.initialStock2026] && !isNaN(parseInt(cols[idx.initialStock2026]))) {
-                  calculatedInitialStock = parseInt(cols[idx.initialStock2026]);
+              if (idx.initialStock2026 !== -1 && cols[idx.initialStock2026] !== undefined && String(cols[idx.initialStock2026]).trim() !== '') {
+                  calculatedInitialStock = parseNum(cols[idx.initialStock2026]);
               } else {
                   calculatedInitialStock = stock2026 + s2026;
               }
 
               batchInsert.set(doc(collection(db, 'everise_system', 'shared', 'inventory_master')), {
-                  product: cols[idx.product], color: cols[idx.color], shipped2025: parseInt(cols[idx.shipped2025]) || 0,
-                  restockTarget: idx.restockTarget !== -1 ? (parseInt(cols[idx.restockTarget]) || 0) : 0,
-                  suggestedRestock: idx.suggestedRestock !== -1 ? (parseInt(cols[idx.suggestedRestock]) || 0) : 0,
+                  product: String(cols[idx.product]).trim(), color: String(cols[idx.color]||'').trim(), shipped2025: parseNum(cols[idx.shipped2025]),
+                  restockTarget: idx.restockTarget !== -1 ? parseNum(cols[idx.restockTarget]) : 0,
+                  suggestedRestock: idx.suggestedRestock !== -1 ? parseNum(cols[idx.suggestedRestock]) : 0,
                   initialStock: calculatedInitialStock, timestamp: Date.now()
               });
           });
-          await batchInsert.commit(); alert("✅ 庫存期初資料建檔完成！"); setViewMode('inventoryOverview');
+          await batchInsert.commit(); alert("✅ 庫存期初資料建檔完成！請檢查庫存總覽。"); setViewMode('inventoryOverview');
       } catch (error) { alert(`❌ 匯入失敗：${error.message}`); }
       finally { setIsUploadingBase(false); e.target.value = ''; }
   };
 
-  const sortedClients = useMemo(() => [...new Set(masterData.map(d => d.client))].sort(), [masterData]);
+  const sortedClients = useMemo(() => [...new Set(masterData.map(d => d.client || 'Unknown'))].sort(), [masterData]);
   const availableMonths = useMemo(() => [...new Set(masterData.map(d => (d.date||'').substring(0, 7)))].filter(Boolean).sort().reverse(), [masterData]);
 
   const allGroupedInvoices = useMemo(() => {
     const res = {};
     sortedClients.forEach(c => {
-        const rows = masterData.filter(d => d.client === c && d.shippedQty > 0);
-        const dates = [...new Set(rows.map(r => r.date))].sort((a, b) => new Date(a||0) - new Date(b||0));
+        const rows = masterData.filter(d => (d.client||'Unknown') === c && d.shippedQty > 0);
+        const dates = [...new Set(rows.map(r => r.date||''))].sort((a, b) => new Date(a||0) - new Date(b||0));
         res[c] = dates.map((date, idx) => {
-            const items = rows.filter(r => r.date === date);
+            const items = rows.filter(r => (r.date||'') === date);
             const conf = clientConfig[c] || { startNo: 1, prefix: c };
             const origin = items[0]?.origin || 'ER'; 
             const total = items.reduce((s, i) => s + Math.round(i.shippedQty * Math.round(i.price)), 0);
@@ -352,7 +363,7 @@ const App = () => {
 
   const filteredMasterData = useMemo(() => {
     let d = masterData;
-    if (activeMasterClient !== 'ALL') d = d.filter(x => x.client === activeMasterClient);
+    if (activeMasterClient !== 'ALL') d = d.filter(x => (x.client||'Unknown') === activeMasterClient);
     if (filterMonth !== 'ALL') d = d.filter(x => (x.date||'').startsWith(filterMonth));
     if (filterOrigin !== 'ALL') d = d.filter(x => x.origin === filterOrigin);
     if (searchTerm) d = d.filter(x => (x.product||'').toLowerCase().includes(searchTerm.toLowerCase()) || (x.orderNo||'').toLowerCase().includes(searchTerm.toLowerCase()) || (x.client||'').toLowerCase().includes(searchTerm.toLowerCase()));
@@ -376,6 +387,36 @@ const App = () => {
       } catch (error) { alert("下載失敗。"); }
       setIsDownloadingPdf(false);
   };
+
+  const handleEditChange = (field, value) => { editValues.current[field] = value; };
+  const startEditing = (record) => { setEditingId(record.id); editValues.current = { ...record }; };
+  const saveEdit = () => {
+      if (!editingId) return;
+      const updates = { ...editValues.current };
+      if (updates.shippedDisplay !== undefined || updates.product !== undefined) {
+          const finalProduct = updates.product !== undefined ? updates.product : masterData.find(x => x.id === editingId)?.product;
+          const finalDisplay = updates.shippedDisplay !== undefined ? updates.shippedDisplay : masterData.find(x => x.id === editingId)?.shippedDisplay;
+          const parsed = parseQuantity(finalDisplay, finalProduct);
+          updates.shippedDisplay = parsed.display; updates.shippedQty = parsed.value;
+      }
+      try { updateMasterDataRow(editingId, updates); } catch(e) { alert('儲存失敗：' + e.message); }
+      setEditingId(null); editValues.current = {};
+  };
+  const handleDelete = (id) => { if(window.confirm("確定要永久刪除此筆資料嗎？")) deleteDoc(doc(db, 'everise_system', 'shared', 'master_data', id)); };
+  const deleteBatchBySource = async (sourceName) => {
+      if (!window.confirm(`警告：確定刪除來自 "${sourceName}" 的所有資料？`)) return;
+      try {
+          const targets = masterData.filter(d => (d.source || 'Unknown') === sourceName);
+          for (let i = 0; i < targets.length; i += 400) {
+              const batch = writeBatch(db);
+              targets.slice(i, i + 400).forEach(d => batch.delete(doc(db, 'everise_system', 'shared', 'master_data', d.id)));
+              await batch.commit();
+          }
+      } catch(e) { alert('刪除失敗！' + e.message); }
+  };
+  const addManualRevenue = async (data) => { try { await addDoc(collection(db, 'everise_system', 'shared', 'manual_revenue'), { ...data, timestamp: Date.now() }); setShowRevenueModal(false); } catch(e) { alert('失敗：' + e.message); } };
+  const deleteManualRevenue = async (id) => { if(window.confirm("確定刪除此筆營收？")) await deleteDoc(doc(db, 'everise_system', 'shared', 'manual_revenue', id)); };
+  const resetConfigToDefaults = async () => { if (window.confirm("重置櫃號至預設值？")) await updateConfig('clientConfig', DEFAULT_CLIENT_CONFIG); };
 
   // --- Modals ---
   const MappingModal = () => {
@@ -490,11 +531,11 @@ const App = () => {
               const isTargetMonth = (dateStr) => exportMonth === 'ALL' || (dateStr||'').startsWith(exportMonth);
               const mOut = masterData.filter(d => d.origin === 'ER' && d.status !== '作廢' && d.product === inv.product && d.color === inv.color);
               const mIn = restockData.filter(d => d.product === inv.product && d.color === inv.color);
-              const outBefore = mOut.filter(d => exportMonth !== 'ALL' && (d.date||'') < exportMonth + '-01').reduce((s, d)=>s+d.shippedQty, 0);
-              const inBefore = mIn.filter(d => exportMonth !== 'ALL' && (d.date||'') < exportMonth + '-01').reduce((s, d)=>s+d.amount, 0);
+              const outBefore = mOut.filter(d => exportMonth !== 'ALL' && (d.date||'') < exportMonth + '-01').reduce((s, d)=>s+(d.shippedQty||0), 0);
+              const inBefore = mIn.filter(d => exportMonth !== 'ALL' && (d.date||'') < exportMonth + '-01').reduce((s, d)=>s+(d.amount||0), 0);
               const stockBeforeMonth = (inv.initialStock || 0) + inBefore - outBefore;
-              const outDuring = mOut.filter(d => isTargetMonth(d.date)).reduce((s, d)=>s+d.shippedQty, 0);
-              const inDuring = mIn.filter(d => isTargetMonth(d.date)).reduce((s, d)=>s+d.amount, 0);
+              const outDuring = mOut.filter(d => isTargetMonth(d.date)).reduce((s, d)=>s+(d.shippedQty||0), 0);
+              const inDuring = mIn.filter(d => isTargetMonth(d.date)).reduce((s, d)=>s+(d.amount||0), 0);
               const finalStock = stockBeforeMonth + inDuring - outDuring;
               csvRows.push(`${inv.product},${inv.color},${exportMonth},${stockBeforeMonth},${inDuring},${outDuring},${finalStock}`);
           });
@@ -527,7 +568,7 @@ const App = () => {
 
   const InventoryOverviewView = () => {
       const filteredInv = computedInventory.filter(inv => (filterProduct === 'ALL' || inv.product === filterProduct) && ((inv.product||'').toLowerCase().includes(searchTerm.toLowerCase()) || (inv.color||'').toLowerCase().includes(searchTerm.toLowerCase())));
-      const uniqueProducts = [...new Set(inventoryMaster.map(i => i.product))].sort();
+      const uniqueProducts = [...new Set(inventoryMaster.map(i => i.product || 'Unknown'))].sort();
       return (
           <div className="w-full p-6 animate-in fade-in min-h-screen bg-slate-50">
               <div className="mb-6 flex justify-between items-center print:hidden">
@@ -545,10 +586,10 @@ const App = () => {
                       <thead className="bg-slate-800 text-white sticky top-0 text-xs font-bold">
                           <tr>
                               <th className="p-4">品名</th><th className="p-4">顏色</th>
-                              <th className="p-4 text-center text-slate-400">期初基準</th>
-                              <th className="p-4 text-center text-red-400">系統已扣<br/><span className="font-normal text-[10px]">(- SA出貨)</span></th>
-                              <th className="p-4 text-center text-blue-400">系統已加<br/><span className="font-normal text-[10px]">(+ 進貨/微調)</span></th>
-                              <th className="p-4 text-center text-emerald-300">當前實際庫存<br/><span className="font-normal text-[10px]">(系統自動結算)</span></th>
+                              <th className="p-4 text-center text-slate-400">期初基準<br/><span className="font-normal text-[10px]">(表單基準)</span></th>
+                              <th className="p-4 text-center text-red-400">SA系統已扣<br/><span className="font-normal text-[10px]">(- 出庫明細)</span></th>
+                              <th className="p-4 text-center text-blue-400">登記進貨<br/><span className="font-normal text-[10px]">(+ 手動加總)</span></th>
+                              <th className="p-4 text-center text-emerald-300 border-l border-slate-700">當前實際庫存<br/><span className="font-normal text-[10px]">(自動結算)</span></th>
                               <th className="p-4 text-center text-yellow-300">安全水位</th>
                               <th className="p-4 text-center text-indigo-300">建議補貨量</th>
                               <th className="p-4 text-center">狀態</th>
@@ -564,7 +605,7 @@ const App = () => {
                                       <td className="p-4 text-center font-mono text-slate-500">{inv.initialStock.toLocaleString()}</td>
                                       <td className="p-4 text-center font-mono font-bold text-red-500">-{inv.totalShipped.toLocaleString()}</td>
                                       <td className="p-4 text-center font-mono font-bold text-blue-500">+{inv.totalRestocked.toLocaleString()}</td>
-                                      <td className={`p-4 text-center font-mono font-black text-xl ${numColor}`}>{inv.currentStock.toLocaleString()}</td>
+                                      <td className={`p-4 text-center font-mono font-black text-xl border-l border-slate-100 ${numColor}`}>{inv.currentStock.toLocaleString()}</td>
                                       <td className="p-4 text-center font-mono text-slate-500">{inv.restockTarget||'-'}</td><td className="p-4 text-center font-mono font-black text-indigo-600">{inv.suggestedRestock||'-'}</td>
                                       <td className="p-4 text-center">
                                           {inv.stockStatus === 'negative' ? <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-black animate-pulse">欠貨</span> : inv.stockStatus === 'low' ? <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-black">需補貨</span> : <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-xs font-bold">充足</span>}
@@ -581,7 +622,7 @@ const App = () => {
 
   const InventoryLogView = () => {
       const [logFilterProduct, setLogFilterProduct] = useState('ALL');
-      const uniqueProducts = [...new Set(masterData.map(i => i.product))].sort();
+      const uniqueProducts = [...new Set(masterData.map(i => i.product || 'Unknown'))].sort();
       const logData = masterData.filter(d => d.origin === 'ER' && d.status !== '作廢' && (logFilterProduct === 'ALL' || d.product === logFilterProduct) && ((d.client||'').toLowerCase().includes(searchTerm.toLowerCase()) || (d.cabinetNo||'').toLowerCase().includes(searchTerm.toLowerCase()))).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
       return (
           <div className="w-full p-6 animate-in fade-in min-h-screen bg-white">
@@ -597,7 +638,7 @@ const App = () => {
                       <thead className="bg-indigo-50 sticky top-0 text-xs font-black text-indigo-900"><tr><th className="p-3">日期</th><th className="p-3">出貨客戶</th><th className="p-3">品名</th><th className="p-3">顏色</th><th className="p-3 text-right text-red-600">扣除數量 (-Y)</th><th className="p-3 text-center">對應 SA 櫃號</th></tr></thead>
                       <tbody className="divide-y divide-slate-100">
                           {logData.map(d => (
-                              <tr key={d.id} className="hover:bg-indigo-50/30"><td className="p-3 font-mono">{d.date}</td><td className="p-3 font-black">{d.client}</td><td className="p-3 font-bold">{d.product}</td><td className="p-3">{d.color}</td><td className="p-3 text-right font-mono font-black text-red-500">-{d.shippedQty}</td><td className="p-3 text-center text-xs font-bold text-indigo-600 bg-indigo-50/50 rounded">{d.cabinetNo || allGroupedInvoices[d.client]?.find(inv => inv.date === d.date)?.cabinetNo || '-'}</td></tr>
+                              <tr key={d.id} className="hover:bg-indigo-50/30"><td className="p-3 font-mono">{d.date || '-'}</td><td className="p-3 font-black">{d.client || '-'}</td><td className="p-3 font-bold">{d.product || '-'}</td><td className="p-3">{d.color || '-'}</td><td className="p-3 text-right font-mono font-black text-red-500">-{d.shippedQty || 0}</td><td className="p-3 text-center text-xs font-bold text-indigo-600 bg-indigo-50/50 rounded">{d.cabinetNo || allGroupedInvoices[d.client]?.find(inv => inv.date === d.date)?.cabinetNo || '-'}</td></tr>
                           ))}
                       </tbody>
                   </table>
@@ -662,7 +703,7 @@ const App = () => {
                   {editingId === d.id ? (
                     <><td className="p-2"><input className="border w-full" defaultValue={d.date} onChange={e => handleEditChange('date', e.target.value)} /></td><td className="p-2 font-bold">{d.client}</td><td className="p-2"><input className="border w-full font-bold" defaultValue={d.cabinetNo} onChange={e => handleEditChange('cabinetNo', e.target.value)} /></td><td className="p-2 font-bold">{d.origin}</td><td className="p-2"><input className="border w-full font-bold" autoFocus defaultValue={d.product} onChange={e => handleEditChange('product', e.target.value)} /></td><td className="p-2"><input className="border w-full" defaultValue={d.color} onChange={e => handleEditChange('color', e.target.value)} /></td><td className="p-2"><input className="border w-full text-right" defaultValue={d.shippedDisplay || d.shippedQty} onChange={e => handleEditChange('shippedDisplay', e.target.value)} /></td><td className="p-2 text-center">{d.status}</td><td className="p-2 text-center"><button onClick={saveEdit} className="p-1 bg-green-500 text-white rounded"><CheckCircle2 className="w-4 h-4" /></button><button onClick={()=>setEditingId(null)} className="p-1 bg-slate-300 text-white rounded"><X className="w-4 h-4" /></button></td></>
                   ) : (
-                    <><td className="p-3 text-slate-500">{d.date}</td><td className="p-3 font-bold text-slate-700">{d.client}</td><td className="p-3 font-bold text-blue-600">{d.cabinetNo || '-'}</td><td className="p-3 text-xs font-bold">{d.origin === 'China' ? <span className="text-red-500">CN</span> : <span className="text-blue-500">ER</span>}</td><td className={`p-3 font-bold ${d.status === '作廢' ? 'line-through text-slate-400' : 'text-slate-800'}`}>{d.product}</td><td className="p-3 text-slate-600">{d.color}</td><td className="p-3 text-right font-mono font-bold text-blue-600">{d.shippedQty}</td><td className="p-3 text-center">{d.status === '作廢' && <span className="bg-red-100 text-red-600 px-2 rounded text-xs font-bold">已作廢</span>}</td><td className="p-3 text-center">{d.status !== '作廢' ? <><button onClick={()=>startEditing(d)} className="text-slate-300 hover:text-blue-500 mr-2"><Edit3 className="w-4 h-4 inline"/></button><button onClick={()=>handleVoidOrder(d.id)} className="text-red-400 font-bold text-xs bg-red-50 px-2 rounded border border-red-100 hover:bg-red-100">作廢回補</button></> : <button onClick={()=>handleDelete(d.id)} className="text-slate-300 hover:text-red-500"><Trash className="w-4 h-4 inline"/></button>}</td></>
+                    <><td className="p-3 text-slate-500">{d.date || '-'}</td><td className="p-3 font-bold text-slate-700">{d.client || '-'}</td><td className="p-3 font-bold text-blue-600">{d.cabinetNo || '-'}</td><td className="p-3 text-xs font-bold">{d.origin === 'China' ? <span className="text-red-500">CN</span> : <span className="text-blue-500">ER</span>}</td><td className={`p-3 font-bold ${d.status === '作廢' ? 'line-through text-slate-400' : 'text-slate-800'}`}>{d.product || '-'}</td><td className="p-3 text-slate-600">{d.color || '-'}</td><td className="p-3 text-right font-mono font-bold text-blue-600">{d.shippedQty || 0}</td><td className="p-3 text-center">{d.status === '作廢' && <span className="bg-red-100 text-red-600 px-2 rounded text-xs font-bold">已作廢</span>}</td><td className="p-3 text-center">{d.status !== '作廢' ? <><button onClick={()=>startEditing(d)} className="text-slate-300 hover:text-blue-500 mr-2"><Edit3 className="w-4 h-4 inline"/></button><button onClick={()=>handleVoidOrder(d.id)} className="text-red-400 font-bold text-xs bg-red-50 px-2 rounded border border-red-100 hover:bg-red-100">作廢回補</button></> : <button onClick={()=>handleDelete(d.id)} className="text-slate-300 hover:text-red-500"><Trash className="w-4 h-4 inline"/></button>}</td></>
                   )}
                 </tr>
               ))}
@@ -772,7 +813,7 @@ const App = () => {
                 <div className="bg-white rounded-2xl shadow-sm border p-6">
                     <h3 className="font-black mb-4 flex items-center gap-2 text-xl"><TableIcon className="text-blue-600"/> 基礎設定與初始化</h3>
                     <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex justify-between items-center">
-                        <div><h4 className="font-bold text-blue-900">匯入初始庫存表 (Inventory Baseline)</h4><p className="text-xs text-blue-600 mt-1">上傳老闆的格式 CSV 檔，系統會優先讀取你的「2026年初始數量」。</p></div>
+                        <div><h4 className="font-bold text-blue-900">匯入初始庫存表 (Inventory Baseline)</h4><p className="text-xs text-blue-600 mt-1">請上傳含有「2026年初始數量」欄位的 CSV，系統會建立防呆庫存表。</p></div>
                         <label className={`bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg cursor-pointer font-bold text-sm shadow-sm ${isUploadingBase ? 'opacity-50 pointer-events-none' : ''}`}>{isUploadingBase ? '建檔中...' : '建檔匯入'}<input type="file" accept=".csv" className="hidden" onChange={handleInventoryBaseUpload} disabled={isUploadingBase} /></label>
                     </div>
                 </div>
