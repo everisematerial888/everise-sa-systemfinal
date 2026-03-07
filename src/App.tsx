@@ -826,7 +826,7 @@ const App = () => {
         )}
       </main>
 
-      <style dangerouslySetInnerHTML={{ __html: `
+      <style dangerouslySetInnerHTML={{ __html: ` 
         @media print {
           body * { visibility: hidden; } #print-area, #print-area * { visibility: visible; }
           #print-area { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; }
