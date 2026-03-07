@@ -267,6 +267,7 @@ const App = () => {
       e.target.value = '';
   };
 
+  // --- 🌟 更新：支援「2026年初始數量」的智慧讀取 ---
   const handleInventoryBaseUpload = async (e) => {
       const file = e.target.files[0]; if (!file) return;
       if (!window.confirm("匯入新期初總表會覆蓋計算基準，確定？")) return;
@@ -279,8 +280,12 @@ const App = () => {
           
           const idx = {
               product: getIdx(['品名', 'Product']), color: getIdx(['顏色', 'Color']),
-              shipped2025: getIdx(['2025年出貨', '2025年的出貨', '2025']), shipped2026: getIdx(['2026年出貨', '2026出貨', '2026年的出貨']),
-              stock2026: getIdx(['2026年庫存', '2026庫存', '2026年的庫存']), restockTarget: getIdx(['安全水位', '補貨參考', '低於此數字']), suggestedRestock: getIdx(['建議補貨量', '補貨量'])
+              shipped2025: getIdx(['2025年出貨', '2025年的出貨', '2025']), 
+              shipped2026: getIdx(['2026年出貨', '2026出貨', '2026年的出貨']),
+              stock2026: getIdx(['2026年庫存', '2026庫存', '2026年的庫存']), 
+              initialStock2026: getIdx(['2026年初始數量', '初始數量', '初始']), // 讀取你新增的欄位
+              restockTarget: getIdx(['安全水位', '補貨參考', '低於此數字']), 
+              suggestedRestock: getIdx(['建議補貨量', '補貨量'])
           };
           if (idx.product === -1 || idx.stock2026 === -1) throw new Error("標題缺少：品名、2026年庫存");
 
@@ -292,13 +297,23 @@ const App = () => {
           rows.slice(1).forEach((rowStr) => {
               const cols = rowStr.split(',').map(c => c.trim().replace(/"/g, ''));
               if (cols.length < 3 || !cols[idx.product]) return;
+              
               const s2026 = parseInt(cols[idx.shipped2026]) || 0;
               const stock2026 = parseInt(cols[idx.stock2026]) || 0;
+              
+              // 智能推算邏輯：優先讀取你填的初始數量，如果是空白的，系統自動幫你相加推算
+              let calculatedInitialStock = 0;
+              if (idx.initialStock2026 !== -1 && cols[idx.initialStock2026] && !isNaN(parseInt(cols[idx.initialStock2026]))) {
+                  calculatedInitialStock = parseInt(cols[idx.initialStock2026]);
+              } else {
+                  calculatedInitialStock = stock2026 + s2026;
+              }
+
               batchInsert.set(doc(collection(db, 'everise_system', 'shared', 'inventory_master')), {
                   product: cols[idx.product], color: cols[idx.color], shipped2025: parseInt(cols[idx.shipped2025]) || 0,
                   restockTarget: idx.restockTarget !== -1 ? (parseInt(cols[idx.restockTarget]) || 0) : 0,
                   suggestedRestock: idx.suggestedRestock !== -1 ? (parseInt(cols[idx.suggestedRestock]) || 0) : 0,
-                  initialStock: stock2026 + s2026, timestamp: Date.now()
+                  initialStock: calculatedInitialStock, timestamp: Date.now()
               });
           });
           await batchInsert.commit(); alert("✅ 庫存期初資料建檔完成！"); setViewMode('inventoryOverview');
@@ -530,8 +545,8 @@ const App = () => {
                       <thead className="bg-slate-800 text-white sticky top-0 text-xs font-bold">
                           <tr>
                               <th className="p-4">品名</th><th className="p-4">顏色</th>
-                              <th className="p-4 text-center text-slate-400">期初基準<br/><span className="font-normal text-[10px]">(表單庫存+出貨)</span></th>
-                              <th className="p-4 text-center text-red-400">系統已扣<br/><span className="font-normal text-[10px]">(- 出貨量)</span></th>
+                              <th className="p-4 text-center text-slate-400">期初基準</th>
+                              <th className="p-4 text-center text-red-400">系統已扣<br/><span className="font-normal text-[10px]">(- SA出貨)</span></th>
                               <th className="p-4 text-center text-blue-400">系統已加<br/><span className="font-normal text-[10px]">(+ 進貨/微調)</span></th>
                               <th className="p-4 text-center text-emerald-300">當前實際庫存<br/><span className="font-normal text-[10px]">(系統自動結算)</span></th>
                               <th className="p-4 text-center text-yellow-300">安全水位</th>
@@ -757,7 +772,7 @@ const App = () => {
                 <div className="bg-white rounded-2xl shadow-sm border p-6">
                     <h3 className="font-black mb-4 flex items-center gap-2 text-xl"><TableIcon className="text-blue-600"/> 基礎設定與初始化</h3>
                     <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex justify-between items-center">
-                        <div><h4 className="font-bold text-blue-900">匯入初始庫存表 (Inventory Baseline)</h4><p className="text-xs text-blue-600 mt-1">上傳老闆的格式 CSV 檔，這將會覆蓋現有的安全水位與初始庫存計算基準。</p></div>
+                        <div><h4 className="font-bold text-blue-900">匯入初始庫存表 (Inventory Baseline)</h4><p className="text-xs text-blue-600 mt-1">上傳老闆的格式 CSV 檔，系統會優先讀取你的「2026年初始數量」。</p></div>
                         <label className={`bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg cursor-pointer font-bold text-sm shadow-sm ${isUploadingBase ? 'opacity-50 pointer-events-none' : ''}`}>{isUploadingBase ? '建檔中...' : '建檔匯入'}<input type="file" accept=".csv" className="hidden" onChange={handleInventoryBaseUpload} disabled={isUploadingBase} /></label>
                     </div>
                 </div>
