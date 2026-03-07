@@ -1,23 +1,18 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
   FileText, Upload, Printer, ChevronRight, Hash, 
-  ArrowLeft, Settings, Search,
-  CheckCircle2, FileSpreadsheet,
+  ArrowLeft, Settings, Search, CheckCircle2, FileSpreadsheet,
   Table as TableIcon, LayoutDashboard, Edit3, X, Trash,
   Download, Database, Layers, Sparkles, MessageSquare, Loader2,
   TrendingUp, DollarSign, Calendar, PieChart, BarChart3, Calculator,
   Cloud, CloudOff, Save, Archive, Plus, Trash2, MapPin, Package, KeyRound,
-  RefreshCw, Plane, Warehouse, Filter, AlertTriangle, ListOrdered
+  RefreshCw, Plane, Warehouse, Filter, AlertTriangle, ListOrdered, Link, ShieldAlert, CheckSquare, FileOutput
 } from 'lucide-react';
 
 // --- Firebase Imports ---
 import { initializeApp } from 'firebase/app';
-import { 
-  getAuth, signInAnonymously, onAuthStateChanged 
-} from 'firebase/auth';
-import { 
-  getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, writeBatch
-} from 'firebase/firestore';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, writeBatch } from 'firebase/firestore';
 
 // --- 動態載入 html2pdf 套件 ---
 const loadHtml2Pdf = () => {
@@ -42,30 +37,19 @@ const firebaseConfig = {
 };
 const apiKeyDefault = "AIzaSyD6v4BGNqEzJwAUlSmijajj_jUU715wnXc"; 
 
-// --- 預設的客戶櫃號設定 ---
+// --- 預設客戶櫃號設定 ---
 const DEFAULT_CLIENT_CONFIG = {
-  "AP": { startNo: 955, prefix: "AP" },
-  "APS": { startNo: 860, prefix: "APS" },
-  "CCHHH": { startNo: 138, prefix: "CCHHH" },
-  "CH": { startNo: 276, prefix: "CH" },
-  "CL": { startNo: 300, prefix: "CL" },
-  "CS": { startNo: 125, prefix: "CS" },
-  "CSK": { startNo: 586, prefix: "CSK" },
-  "DP": { startNo: 424, prefix: "DP" },
-  "HEC": { startNo: 22, prefix: "HEC" },
-  "HRR": { startNo: 97, prefix: "HRR" },
-  "PAT": { startNo: 29, prefix: "PAT" },
-  "PCR": { startNo: 251, prefix: "PCR" },
-  "PV": { startNo: 211, prefix: "PV" },
-  "ROMA": { startNo: 11, prefix: "ROMA" },
-  "SPN": { startNo: 127, prefix: "SPN" },
-  "SRN": { startNo: 345, prefix: "SRN" },
-  "SRR": { startNo: 115, prefix: "SRR" },
-  "TC": { startNo: 304, prefix: "TC" },
-  "TNC": { startNo: 838, prefix: "TNC" },
-  "W": { startNo: 597, prefix: "W" },
-  "WL": { startNo: 285, prefix: "WL" },
-  "WP": { startNo: 274, prefix: "WP" }
+  "AP": { startNo: 955, prefix: "AP" }, "APS": { startNo: 860, prefix: "APS" },
+  "CCHHH": { startNo: 138, prefix: "CCHHH" }, "CH": { startNo: 276, prefix: "CH" },
+  "CL": { startNo: 300, prefix: "CL" }, "CS": { startNo: 125, prefix: "CS" },
+  "CSK": { startNo: 586, prefix: "CSK" }, "DP": { startNo: 424, prefix: "DP" },
+  "HEC": { startNo: 22, prefix: "HEC" }, "HRR": { startNo: 97, prefix: "HRR" },
+  "PAT": { startNo: 29, prefix: "PAT" }, "PCR": { startNo: 251, prefix: "PCR" },
+  "PV": { startNo: 211, prefix: "PV" }, "ROMA": { startNo: 11, prefix: "ROMA" },
+  "SPN": { startNo: 127, prefix: "SPN" }, "SRN": { startNo: 345, prefix: "SRN" },
+  "SRR": { startNo: 115, prefix: "SRR" }, "TC": { startNo: 304, prefix: "TC" },
+  "TNC": { startNo: 838, prefix: "TNC" }, "W": { startNo: 597, prefix: "W" },
+  "WL": { startNo: 285, prefix: "WL" }, "WP": { startNo: 274, prefix: "WP" }
 };
 
 // --- 智能數量解析大腦 ---
@@ -75,12 +59,9 @@ const parseQuantity = (rawQtyStr, productName) => {
 
   if (str.includes('=') || str.includes('*')) {
       const match = str.match(/=([\d.]+)\s*Y?/);
-      if (match) {
-          return { display: str, value: parseFloat(match[1]) };
-      } else {
-          const numMatch = str.replace(/[^\d.-]/g, '');
-          return { display: str, value: parseFloat(numMatch) || 0 };
-      }
+      if (match) return { display: str, value: parseFloat(match[1]) };
+      const numMatch = str.replace(/[^\d.-]/g, '');
+      return { display: str, value: parseFloat(numMatch) || 0 };
   }
 
   const qty = parseFloat(str.replace(/[^\d.-]/g, ''));
@@ -88,12 +69,8 @@ const parseQuantity = (rawQtyStr, productName) => {
 
   let yPerRoll = 50; 
   const pName = (productName || '').toUpperCase();
-  
-  if (pName.includes('210 PU')) {
-      yPerRoll = 150;
-  } else if (/(CHACK FACE|KEVLAR|LACOSTE|VACUUM|CHECKER|385|305)/.test(pName)) {
-      yPerRoll = 40;
-  }
+  if (pName.includes('210 PU')) yPerRoll = 150;
+  else if (/(CHACK FACE|KEVLAR|LACOSTE|VACUUM|CHECKER|385|305)/.test(pName)) yPerRoll = 40;
 
   const rolls = Math.floor(qty / yPerRoll);
   const remainder = qty % yPerRoll;
@@ -103,257 +80,57 @@ const parseQuantity = (rawQtyStr, productName) => {
       display = `${yPerRoll}*${rolls}R`;
       if (remainder > 0) display += `+${remainder}`;
       display += `=${qty}Y`;
-  } else {
-      display = `${qty}Y`;
-  }
+  } else { display = `${qty}Y`; }
 
   return { display, value: qty };
 };
 
-// --- AI Modal ---
-const AiModal = ({ show, onClose, prompt, setPrompt, onSend, response, loading, hasKey }) => {
-  if (!show) return null;
-  return (
-    <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh]">
-        <div className="p-4 border-b bg-slate-50 flex justify-between items-center">
-          <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-purple-600" /> AI 訂單數據分析
-          </h3>
-          <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full"><X className="w-5 h-5 text-slate-500" /></button>
-        </div>
-        <div className="flex-1 overflow-auto p-6 bg-slate-50">
-          {!hasKey && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm flex gap-2 items-start">
-              <KeyRound className="w-5 h-5 shrink-0" />
-              <div>
-                <p className="font-bold">尚未設定 Gemini API Key</p>
-                <p>請前往「設定」頁面輸入您的 API Key 才能使用 AI 分析功能。</p>
-              </div>
-            </div>
-          )}
-          {response ? (
-             <div className="prose prose-sm max-w-none bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-               <div className="whitespace-pre-wrap leading-relaxed text-slate-700">{response}</div>
-             </div>
-          ) : (
-            <div className="text-center py-12 text-slate-400">
-              <Sparkles className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>輸入問題，讓 AI 幫您分析當前的訂單數據...</p>
-            </div>
-          )}
-        </div>
-        <div className="p-4 bg-white border-t flex gap-2">
-          <input 
-            type="text" 
-            className="flex-1 border rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:outline-none disabled:bg-slate-100"
-            placeholder="例如：統計本月南泰廠商的出貨總量？"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !loading && hasKey && onSend()}
-            disabled={!hasKey}
-            autoFocus
-          />
-          <button 
-            onClick={onSend}
-            disabled={loading || !prompt || !hasKey}
-            className="bg-purple-600 text-white px-6 py-2 rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
-            {loading ? '分析中...' : '送出'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// --- Manual Revenue Modal ---
-const ManualRevenueModal = ({ show, onClose, onSave }) => {
-    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-    const [client, setClient] = useState('');
-    const [cabinetNo, setCabinetNo] = useState('');
-    const [amount, setAmount] = useState('');
-    const [source, setSource] = useState('China');
-    const [note, setNote] = useState('');
-
-    if (!show) return null;
-
-    const handleSubmit = () => {
-        if (!amount || !client || !date) {
-            alert("請填寫完整資訊 (日期、客戶、金額)");
-            return;
-        }
-        onSave({ 
-            date, 
-            client: client.toUpperCase(), 
-            cabinetNo: cabinetNo || 'N/A',
-            amount: parseFloat(amount), 
-            source, 
-            note 
-        });
-        setClient(''); setCabinetNo(''); setAmount(''); setNote('');
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                        <Plus className="w-5 h-5 text-emerald-600" /> 新增額外營收
-                    </h3>
-                    <button onClick={onClose}><X className="w-5 h-5 text-slate-400" /></button>
-                </div>
-                <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-bold text-slate-500 mb-1">出貨日期</label>
-                            <input type="date" className="w-full border rounded-lg px-3 py-2 font-mono" value={date} onChange={e => setDate(e.target.value)} />
-                        </div>
-                        <div>
-                             <label className="block text-xs font-bold text-slate-500 mb-1">出貨來源</label>
-                             <select className="w-full border rounded-lg px-3 py-2 bg-slate-50" value={source} onChange={e => setSource(e.target.value)}>
-                                 <option value="China">China (中國直送)</option>
-                                 <option value="Warehouse">Warehouse (倉庫)</option>
-                                 <option value="Other">Other (其他)</option>
-                             </select>
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-bold text-slate-500 mb-1">客戶名稱</label>
-                            <input type="text" className="w-full border rounded-lg px-3 py-2 font-bold uppercase" value={client} onChange={e => setClient(e.target.value)} placeholder="例如：APS" />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-slate-500 mb-1">客戶櫃號/單號</label>
-                            <input type="text" className="w-full border rounded-lg px-3 py-2" value={cabinetNo} onChange={e => setCabinetNo(e.target.value)} placeholder="例如：SRR#114" />
-                        </div>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 mb-1">出貨金額 (THB)</label>
-                        <input type="number" className="w-full border rounded-lg px-3 py-2 font-mono text-xl text-emerald-600 font-bold bg-emerald-50 border-emerald-200" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 mb-1">備註 (來源說明)</label>
-                        <input type="text" className="w-full border rounded-lg px-3 py-2" value={note} onChange={e => setNote(e.target.value)} placeholder="例如：C4 SHINY" />
-                    </div>
-                </div>
-                <div className="mt-8 flex gap-3">
-                    <button onClick={onClose} className="flex-1 py-3 rounded-lg font-bold text-slate-500 hover:bg-slate-100">關閉</button>
-                    <button onClick={handleSubmit} className="flex-[2] py-3 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200">儲存並新增下一筆</button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// --- 新增品項/顏色 Modal ---
-const AddInventoryModal = ({ show, onClose, onSave }) => {
-    const [product, setProduct] = useState('');
-    const [color, setColor] = useState('');
-    const [initialStock, setInitialStock] = useState('');
-    const [restockTarget, setRestockTarget] = useState('');
-    const [suggestedRestock, setSuggestedRestock] = useState('');
-
-    if (!show) return null;
-
-    const handleSubmit = () => {
-        if (!product || !color) {
-            alert("請填寫品名與顏色！");
-            return;
-        }
-        onSave({ product, color, initialStock, restockTarget, suggestedRestock });
-        setProduct(''); setColor(''); setInitialStock(''); setRestockTarget(''); setSuggestedRestock('');
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                        <Package className="w-5 h-5 text-blue-600" /> 新增品項 / 新顏色
-                    </h3>
-                    <button onClick={onClose}><X className="w-5 h-5 text-slate-400" /></button>
-                </div>
-                <div className="space-y-4">
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 mb-1">品名 (Product)</label>
-                        <input type="text" className="w-full border rounded-lg px-3 py-2 font-bold uppercase" value={product} onChange={e => setProduct(e.target.value)} placeholder="例如：600DX600D" />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 mb-1">顏色 (Color)</label>
-                        <input type="text" className="w-full border rounded-lg px-3 py-2" value={color} onChange={e => setColor(e.target.value)} placeholder="例如：NEON GREEN" />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 mb-1">當前進貨數量 / 初始庫存</label>
-                        <input type="number" className="w-full border rounded-lg px-3 py-2 font-mono text-blue-600 font-bold bg-blue-50 border-blue-200" value={initialStock} onChange={e => setInitialStock(e.target.value)} placeholder="0" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-4">
-                        <div>
-                            <label className="block text-xs font-bold text-slate-500 mb-1">安全水位 (亮紅燈標準)</label>
-                            <input type="number" className="w-full border rounded-lg px-3 py-2 font-mono text-slate-600" value={restockTarget} onChange={e => setRestockTarget(e.target.value)} placeholder="例如：7000" />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-slate-500 mb-1">建議補貨量</label>
-                            <input type="number" className="w-full border rounded-lg px-3 py-2 font-mono text-slate-600" value={suggestedRestock} onChange={e => setSuggestedRestock(e.target.value)} placeholder="例如：5000" />
-                        </div>
-                    </div>
-                </div>
-                <div className="mt-8 flex gap-3">
-                    <button onClick={onClose} className="flex-1 py-3 rounded-lg font-bold text-slate-500 hover:bg-slate-100">取消</button>
-                    <button onClick={handleSubmit} className="flex-[2] py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 shadow-lg shadow-blue-200">儲存建檔</button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
+// ==========================================
+//                 App 主程式
+// ==========================================
 const App = () => {
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
 
-  // --- State ---
+  // --- 狀態管理 ---
   const [user, setUser] = useState(null);
-  const [syncStatus, setSyncStatus] = useState('idle');
+  const [viewMode, setViewMode] = useState('dashboard'); 
+  
+  // 資料庫資料
   const [masterData, setMasterData] = useState([]); 
   const [inventoryMaster, setInventoryMaster] = useState([]); 
+  const [restockData, setRestockData] = useState([]); // 進貨紀錄
+  const [productMappings, setProductMappings] = useState({}); // 品名對應字典
   const [manualRevenueData, setManualRevenueData] = useState([]); 
   const [revenueData, setRevenueData] = useState([]); 
-  const [viewMode, setViewMode] = useState('dashboard'); 
+  
+  // UI 控制
   const [activeClient, setActiveClient] = useState(null);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterProduct, setFilterProduct] = useState('ALL'); // 新增：依品項篩選
   const [editingId, setEditingId] = useState(null);
   const editValues = useRef({}); 
+  const [clientConfig, setClientConfig] = useState(DEFAULT_CLIENT_CONFIG);
 
-  // --- 全局獨立篩選狀態 ---
+  // 全局獨立篩選狀態
   const [filterMonth, setFilterMonth] = useState('ALL');
   const [filterOrigin, setFilterOrigin] = useState('ALL');
   const [activeMasterClient, setActiveMasterClient] = useState('ALL');
 
-  const [userApiKey, setUserApiKey] = useState(() => localStorage.getItem('everise_gemini_key') || '');
-  const [showAiModal, setShowAiModal] = useState(false);
-  const [aiPrompt, setAiPrompt] = useState('');
-  const [aiResponse, setAiResponse] = useState('');
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const [showRevenueModal, setShowRevenueModal] = useState(false); 
-  const [showAddInvModal, setShowAddInvModal] = useState(false); 
-  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
-  
+  // Modals & Loading
   const [isUploading, setIsUploading] = useState(false);
   const [isUploadingBase, setIsUploadingBase] = useState(false);
-
-  const [clientConfig, setClientConfig] = useState(DEFAULT_CLIENT_CONFIG);
-
-  const [vendorRules] = useState([
-    { id: 1, keyword: "SANDWICH", vendor: "南泰" },
-    { id: 2, keyword: "SPONGE", vendor: "南泰" },
-    { id: 3, keyword: "600D", vendor: "龍利達" },
-    { id: 4, keyword: "LACOSTE", vendor: "南泰" },
-    { id: 5, keyword: "VACUMN", vendor: "龍利達" },
-    { id: 6, keyword: "CC", vendor: "南泰" }
-  ]);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [showAddInvModal, setShowAddInvModal] = useState(false);
+  const [showRestockModal, setShowRestockModal] = useState(false);
+  const [showRevenueModal, setShowRevenueModal] = useState(false); 
+  
+  // 智能攔截器專用狀態
+  const [pendingUploadData, setPendingUploadData] = useState(null);
+  const [unmappedItems, setUnmappedItems] = useState([]);
+  const [showMappingModal, setShowMappingModal] = useState(false);
 
   // --- Auth & Data Sync ---
   useEffect(() => {
@@ -363,192 +140,77 @@ const App = () => {
 
   useEffect(() => {
     if (!user) return;
-    setSyncStatus('syncing');
+    const unsubMaster = onSnapshot(collection(db, 'everise_system', 'shared', 'master_data'), (snap) => setMasterData(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const unsubInv = onSnapshot(collection(db, 'everise_system', 'shared', 'inventory_master'), (snap) => setInventoryMaster(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const unsubRestock = onSnapshot(collection(db, 'everise_system', 'shared', 'restock_data'), (snap) => setRestockData(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const unsubRev = onSnapshot(collection(db, 'everise_system', 'shared', 'manual_revenue'), (snap) => setManualRevenueData(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     
-    const masterRef = collection(db, 'everise_system', 'shared', 'master_data');
-    const unsubMaster = onSnapshot(masterRef, (snap) => {
-      setMasterData(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      setSyncStatus('idle');
-    });
-
-    const invRef = collection(db, 'everise_system', 'shared', 'inventory_master');
-    const unsubInv = onSnapshot(invRef, (snap) => {
-      setInventoryMaster(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-
-    const settingsRef = doc(db, 'everise_system', 'shared', 'settings', 'config');
-    const unsubSettings = onSnapshot(settingsRef, (snap) => {
-      if (snap.exists() && snap.data().clientConfig) {
-        setClientConfig(snap.data().clientConfig);
+    // 讀取設定與字典
+    const unsubSettings = onSnapshot(doc(db, 'everise_system', 'shared', 'settings', 'config'), (snap) => {
+      if (snap.exists()) {
+          if (snap.data().clientConfig) setClientConfig(snap.data().clientConfig);
+          if (snap.data().productMappings) setProductMappings(snap.data().productMappings);
       }
     });
 
-    const revRef = collection(db, 'everise_system', 'shared', 'manual_revenue');
-    const unsubRev = onSnapshot(revRef, (snap) => {
-        setManualRevenueData(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-
-    return () => { unsubMaster(); unsubInv(); unsubSettings(); unsubRev(); };
+    return () => { unsubMaster(); unsubInv(); unsubRestock(); unsubRev(); unsubSettings(); };
   }, [user, db]);
 
-  // --- Actions ---
-  const saveMasterDataRow = async (row) => {
-    const { id, ...data } = row;
-    await setDoc(doc(db, 'everise_system', 'shared', 'master_data', id), data);
-  };
-
-  const updateMasterDataRow = async (id, updates) => {
-    await updateDoc(doc(db, 'everise_system', 'shared', 'master_data', id), updates);
-  };
-
-  const deleteMasterDataRow = async (id) => {
-    await deleteDoc(doc(db, 'everise_system', 'shared', 'master_data', id));
-  };
-
-  const deleteBatchBySource = async (sourceName) => {
-      if (!window.confirm(`警告：確定刪除來自 "${sourceName}" 的所有資料？`)) return;
-      setSyncStatus('syncing');
-      try {
-          const targets = masterData.filter(d => d.source === sourceName);
-          for (let i = 0; i < targets.length; i += 400) {
-              const batch = writeBatch(db);
-              targets.slice(i, i + 400).forEach(d => {
-                  batch.delete(doc(db, 'everise_system', 'shared', 'master_data', d.id));
-              });
-              await batch.commit();
-          }
-      } catch(e) {
-          alert('刪除失敗，請檢查權限設定！錯誤：' + e.message);
-      }
-      setSyncStatus('idle');
-  };
-
-  const addManualRevenue = async (data) => {
-      try {
-          await addDoc(collection(db, 'everise_system', 'shared', 'manual_revenue'), { ...data, timestamp: Date.now() });
-          setShowRevenueModal(false);
-      } catch(e) {
-          alert('寫入失敗！錯誤：' + e.message);
-      }
-  };
-
-  const deleteManualRevenue = async (id) => {
-      if(window.confirm("確定刪除此筆營收紀錄？")) {
-          try {
-              await deleteDoc(doc(db, 'everise_system', 'shared', 'manual_revenue', id));
-          } catch(e) { alert('刪除失敗：' + e.message); }
-      }
-  };
-
-  const resetConfigToDefaults = async () => {
-    if (window.confirm("確定要將所有客戶的櫃號起始值重置為系統預設值嗎？")) {
-      try {
-          await setDoc(doc(db, 'everise_system', 'shared', 'settings', 'config'), { clientConfig: DEFAULT_CLIENT_CONFIG }, { merge: true });
-          alert("重置完成！");
-      } catch(e) { alert('重置失敗：' + e.message); }
-    }
-  };
-
-  const handleAddInventoryItem = async (data) => {
-      try {
-          await addDoc(collection(db, 'everise_system', 'shared', 'inventory_master'), {
-              product: data.product.toUpperCase().trim(),
-              color: data.color.trim(),
-              initialStock: parseInt(data.initialStock) || 0,
-              restockTarget: parseInt(data.restockTarget) || 0,
-              suggestedRestock: parseInt(data.suggestedRestock) || 0,
-              shipped2025: 0, 
-              timestamp: Date.now()
-          });
-          setShowAddInvModal(false);
-          alert("✅ 新品項建檔成功！");
-      } catch (error) {
-          alert("❌ 建檔失敗：" + error.message);
-      }
-  };
-
-  // --- Helper Functions ---
-  const startEditing = (record) => {
-    setEditingId(record.id);
-    editValues.current = { ...record };
-  };
-
-  const handleEditChange = (field, value) => {
-    editValues.current[field] = value;
-  };
-
-  const saveEdit = () => {
-    if (!editingId) return;
-    const updates = { ...editValues.current };
-    
-    if (updates.shippedDisplay !== undefined || updates.product !== undefined) {
-        const finalProduct = updates.product !== undefined ? updates.product : masterData.find(x => x.id === editingId)?.product;
-        const finalDisplay = updates.shippedDisplay !== undefined ? updates.shippedDisplay : masterData.find(x => x.id === editingId)?.shippedDisplay;
-        
-        const parsed = parseQuantity(finalDisplay, finalProduct);
-        updates.shippedDisplay = parsed.display;
-        updates.shippedQty = parsed.value;
-    }
-
-    try {
-        updateMasterDataRow(editingId, updates);
-    } catch(e) { alert('儲存失敗：' + e.message); }
-    
-    setEditingId(null);
-    editValues.current = {};
-  };
-
-  const handleDelete = (id) => {
-      if(window.confirm("確定要永久刪除此筆資料嗎？")) {
-          deleteMasterDataRow(id).catch(e => alert('刪除失敗：'+e.message));
-      }
-  };
-
-  // --- Inventory Engine (庫存核心計算) ---
+  // --- Inventory Engine (庫存自動計算核心) ---
   const computedInventory = useMemo(() => {
       if (!inventoryMaster || inventoryMaster.length === 0) return [];
 
       return inventoryMaster.map(inv => {
-          const relatedShipments = masterData.filter(d => 
-              d.origin === 'ER' &&
+          // 計算總出庫 (限泰國倉且未作廢)
+          const relatedOut = masterData.filter(d => 
+              d.origin === 'ER' && d.status !== '作廢' &&
               d.product.trim().toUpperCase() === inv.product.trim().toUpperCase() && 
               d.color.trim().toUpperCase() === inv.color.trim().toUpperCase()
           );
+          const totalShipped = relatedOut.reduce((sum, d) => sum + (d.shippedQty || 0), 0);
 
-          const shipped2026 = relatedShipments.reduce((sum, d) => sum + (d.shippedQty || 0), 0);
-          const currentStock = (inv.initialStock || 0) - shipped2026;
+          // 計算總入庫與盤點微調
+          const relatedIn = restockData.filter(d => 
+              d.product.trim().toUpperCase() === inv.product.trim().toUpperCase() && 
+              d.color.trim().toUpperCase() === inv.color.trim().toUpperCase()
+          );
+          const totalRestocked = relatedIn.reduce((sum, d) => sum + (d.amount || 0), 0);
+
+          const currentStock = (inv.initialStock || 0) + totalRestocked - totalShipped;
           
           let stockStatus = 'normal';
           const target = inv.restockTarget || 0;
-          if (currentStock < 0) {
-              stockStatus = 'negative';
-          } else if (target > 0 && currentStock < target) {
-              stockStatus = 'low';
-          }
+          if (currentStock < 0) stockStatus = 'negative';
+          else if (target > 0 && currentStock < target) stockStatus = 'low';
 
-          return {
-              ...inv,
-              shipped2026,
-              currentStock,
-              stockStatus
-          };
+          return { ...inv, totalShipped, totalRestocked, currentStock, stockStatus };
       });
-  }, [inventoryMaster, masterData]);
+  }, [inventoryMaster, masterData, restockData]);
 
+  // --- Database Actions ---
+  const updateConfig = async (key, data) => {
+      await setDoc(doc(db, 'everise_system', 'shared', 'settings', 'config'), { [key]: data }, { merge: true });
+  };
 
-  // --- CSV Import (Order Tracking) ---
+  const handleVoidOrder = async (id) => {
+      if(window.confirm("確定要【作廢】此筆單據嗎？\n作廢後：\n1. 營收不會計算這筆錢\n2. 扣除的庫存會自動加回泰國倉\n(紀錄會保留並標示作廢)")) {
+          await updateDoc(doc(db, 'everise_system', 'shared', 'master_data', id), { status: '作廢', shippedQty: 0, price: 0 });
+          alert("已作廢！庫存已安全回補。");
+      }
+  };
+
+  // --- CSV Import (智能匯入與防呆攔截器) ---
   const handleFileUpload = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
-    
     setIsUploading(true);
 
     try {
+        let allParsedRows = [];
         for (const file of files) {
-            const text = await new Promise((resolve, reject) => {
+            const text = await new Promise((resolve) => {
                 const reader = new FileReader();
                 reader.onload = (event) => resolve(event.target.result);
-                reader.onerror = (error) => reject(error);
                 reader.readAsText(file);
             });
 
@@ -556,13 +218,14 @@ const App = () => {
             if (rows.length < 1) continue;
             const headers = rows[0].split(',').map(h => h.trim().toLowerCase());
             
+            // 處理櫃號設定更新
             if (headers.includes('client') && headers.includes('number')) {
                  const newConfig = { ...clientConfig };
                  rows.slice(1).forEach(r => {
                      const [c, n] = r.split(',');
                      if (c && n) newConfig[c.toUpperCase().trim()] = { startNo: parseInt(n) || 1, prefix: c.toUpperCase().trim() };
                  });
-                 await setDoc(doc(db, 'everise_system', 'shared', 'settings', 'config'), { clientConfig: newConfig }, { merge: true });
+                 await updateConfig('clientConfig', newConfig);
                  continue;
             }
 
@@ -574,13 +237,11 @@ const App = () => {
                 date: getIdx(['date', '日期']), client: getIdx(['client', '客戶']),
                 product: getIdx(['product', '品名', 'spec']), color: getIdx(['color', '顏色']),
                 shipped: getIdx(['quantity', '數量', '出貨']), price: getIdx(['price', '單價']),
-                cabinet: getIdx(['cabinet', '櫃號']), order: getIdx(['order', '訂單']),
-                status: getIdx(['status', '結案']), note: getIdx(['note', '備註'])
+                cabinet: getIdx(['cabinet', '櫃號']), order: getIdx(['order', '訂單'])
             };
 
-            const promises = rows.slice(1).map((row, rIdx) => {
-                const cols = [];
-                let cur = ''; let inQuote = false;
+            rows.slice(1).forEach((row, rIdx) => {
+                const cols = []; let cur = ''; let inQuote = false;
                 for (let i = 0; i < row.length; i++) {
                     let char = row[i];
                     if (char === '"') inQuote = !inQuote;
@@ -589,350 +250,499 @@ const App = () => {
                 }
                 cols.push(cur.trim());
 
-                if (cols.length < 3) return null;
+                if (cols.length < 3) return;
 
-                const productName = cols[idx.product]?.replace(/"/g, '') || '';
-                const matched = vendorRules.find(rule => productName.toUpperCase().includes(rule.keyword));
-                const parsedQty = parseQuantity(cols[idx.shipped], productName);
+                let rawProduct = cols[idx.product]?.replace(/"/g, '').toUpperCase().trim() || '';
+                let rawColor = cols[idx.color]?.replace(/"/g, '').trim() || '';
                 
-                return saveMasterDataRow({
+                // 1. 數量異常檢查
+                const parsedQty = parseQuantity(cols[idx.shipped], rawProduct);
+                if (parsedQty.value === 0 && cols[idx.shipped]) {
+                    alert(`🚨 嚴重警告：系統無法辨識此數量格式 [ ${cols[idx.shipped]} ]\n發生在品項：${rawProduct}\n請修改 CSV 數量格式後再重新匯入！`);
+                    throw new Error("數量格式異常，匯入已中斷。");
+                }
+
+                allParsedRows.push({
+                    _rawProduct: rawProduct, _rawColor: rawColor,
                     id: `${file.name}-${rIdx}-${Date.now()}`,
-                    date: cols[idx.date] || '',
-                    client: (cols[idx.client] || 'UNKNOWN').toUpperCase().replace(/"/g, ''),
-                    product: productName,
-                    color: (cols[idx.color] || '').replace(/"/g, ''),
-                    shippedQty: parsedQty.value,
-                    shippedDisplay: parsedQty.display,
+                    date: cols[idx.date] || '', client: (cols[idx.client] || 'UNKNOWN').toUpperCase().replace(/"/g, ''),
+                    shippedQty: parsedQty.value, shippedDisplay: parsedQty.display,
                     price: parseFloat(cols[idx.price]?.replace(/[^\d.-]/g, '')) || 0,
-                    vendor: matched ? matched.vendor : "待查",
                     cabinetNo: cols[idx.cabinet] ? cols[idx.cabinet].replace(/"/g, '') : '',
-                    orderNo: cols[idx.order] || 'N/A',
-                    status: cols[idx.status] || '',
-                    note: cols[idx.note] || '',
-                    source: file.name,
-                    origin: origin,
-                    timestamp: Date.now()
+                    orderNo: cols[idx.order] || 'N/A', status: '', note: '',
+                    source: file.name, origin: origin, timestamp: Date.now()
                 });
             });
-            
-            await Promise.all(promises.filter(p => p !== null));
         }
         
-        alert("✅ 出貨單匯入成功！系統已同步扣除庫存並建立請款單。");
-        setViewMode('dashboard');
-        
+        if(allParsedRows.length === 0) return;
+
+        // 2. 智能品名比對攔截
+        const unmapped = [];
+        allParsedRows.forEach(row => {
+            if (row.origin !== 'ER') return; // 中國直發不需對應庫存
+            
+            // 檢查字典
+            const dictKey = `${row._rawProduct}|${row._rawColor}`;
+            if (productMappings[dictKey]) {
+                row.product = productMappings[dictKey].product;
+                row.color = productMappings[dictKey].color;
+                return;
+            }
+            
+            // 檢查標準庫存表
+            const exactMatch = inventoryMaster.find(i => i.product.toUpperCase().trim() === row._rawProduct && i.color.toUpperCase().trim() === row._rawColor.toUpperCase());
+            if (exactMatch) {
+                row.product = exactMatch.product; row.color = exactMatch.color;
+            } else {
+                // 找不到對應，加入未映射清單
+                if (!unmapped.find(u => u.rawKey === dictKey)) {
+                    unmapped.push({ rawKey: dictKey, rawProduct: row._rawProduct, rawColor: row._rawColor });
+                }
+            }
+        });
+
+        if (unmapped.length > 0) {
+            setUnmappedItems(unmapped);
+            setPendingUploadData(allParsedRows);
+            setShowMappingModal(true); // 暫停並跳出防呆視窗
+        } else {
+            await finalizeUpload(allParsedRows, productMappings);
+        }
+
     } catch (error) {
-        alert(`❌ 上傳失敗！\n錯誤代碼：${error.message}`);
+        if(error.message !== "數量格式異常，匯入已中斷。") alert(`❌ 上傳失敗！\n錯誤代碼：${error.message}`);
     } finally {
-        setIsUploading(false);
-        e.target.value = ''; 
+        setIsUploading(false); e.target.value = ''; 
     }
   };
 
-  // --- CSV Import (Inventory Baseline) ---
-  const handleInventoryBaseUpload = async (e) => {
+  // 確認寫入資料庫
+  const finalizeUpload = async (rowsToSave, newMappings) => {
+      const batch = writeBatch(db);
+      rowsToSave.forEach(row => {
+          // 確保都有品名顏色
+          if(!row.product) row.product = row._rawProduct;
+          if(!row.color) row.color = row._rawColor;
+          
+          const docData = {...row};
+          delete docData._rawProduct; delete docData._rawColor;
+          batch.set(doc(db, 'everise_system', 'shared', 'master_data', row.id), docData);
+      });
+      await batch.commit();
+      
+      if (Object.keys(newMappings).length > Object.keys(productMappings).length) {
+          await updateConfig('productMappings', newMappings);
+      }
+      
+      alert("✅ 出貨單匯入成功！系統已同步建立請款單並扣除庫存。");
+      setShowMappingModal(false);
+      setPendingUploadData(null);
+      setViewMode('dashboard');
+  };
+
+  // --- 進貨專用 CSV 匯入 ---
+  const handleRestockUpload = async (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      
-      if (!window.confirm("匯入新的庫存總表會【清除並覆蓋】目前系統中的所有庫存基礎設定，確定要繼續嗎？\n(這不會刪除出貨單和營收，只會更新「庫存總覽」的計算基準)")) return;
-
-      setIsUploadingBase(true);
       try {
-          const text = await new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = (event) => resolve(event.target.result);
-              reader.onerror = (error) => reject(error);
-              reader.readAsText(file);
+          const text = await new Promise((resolve) => {
+              const reader = new FileReader(); reader.onload = (e) => resolve(e.target.result); reader.readAsText(file);
           });
-
           const rows = text.split(/\r?\n/).filter(r => r.trim());
-          if (rows.length < 2) throw new Error("檔案內容為空或缺少標題列");
-
-          const headers = rows[0].split(',').map(h => h.trim());
-          const getIdx = (keywords) => headers.findIndex(h => keywords.some(k => h.includes(k)));
-          
-          const idx = {
-              product: getIdx(['品名', 'Product']),
-              color: getIdx(['顏色', 'Color']),
-              shipped2025: getIdx(['2025年出貨', '2025']),
-              shipped2026: getIdx(['2026年出貨', '2026出貨']),
-              stock2026: getIdx(['2026年庫存', '2026庫存']),
-              restockTarget: getIdx(['安全水位', '補貨參考', '低於此數字']),
-              suggestedRestock: getIdx(['建議補貨量', '補貨量'])
+          const headers = rows[0].split(',').map(h => h.trim().toLowerCase());
+          const getIdx = (keys) => headers.findIndex(h => keys.some(k => h.includes(k)));
+          const idx = { 
+              date: getIdx(['date', '日期']), product: getIdx(['product', '品名']), 
+              color: getIdx(['color', '顏色']), qty: getIdx(['quantity', '數量']), note: getIdx(['note', '備註']) 
           };
 
-          if (idx.product === -1 || idx.color === -1 || idx.stock2026 === -1) {
-              throw new Error("CSV 標題列必須包含：'品名', '顏色', '2026年出貨', '2026年庫存' 等關鍵字。");
-          }
+          if (idx.product === -1 || idx.qty === -1) throw new Error("缺少必要標題：品名、數量");
 
-          // 先刪除舊的 Inventory Master (一次最多 500 筆，實務上庫存品項通常不會超過)
-          const batchDelete = writeBatch(db);
-          inventoryMaster.forEach(inv => {
-              batchDelete.delete(doc(db, 'everise_system', 'shared', 'inventory_master', inv.id));
-          });
-          await batchDelete.commit();
-
-          // 寫入新的 Inventory Master
-          const batchInsert = writeBatch(db);
+          const batch = writeBatch(db);
           rows.slice(1).forEach((rowStr) => {
               const cols = rowStr.split(',').map(c => c.trim().replace(/"/g, ''));
-              if (cols.length < 3 || !cols[idx.product]) return;
-
-              const s2026 = parseInt(cols[idx.shipped2026]) || 0;
-              const stock2026 = parseInt(cols[idx.stock2026]) || 0;
-              
-              // 核心邏輯：程式自動反推 1/1 原始庫存
-              const calculatedInitialStock = stock2026 + s2026;
-
-              const newRef = doc(collection(db, 'everise_system', 'shared', 'inventory_master'));
-              batchInsert.set(newRef, {
-                  product: cols[idx.product],
-                  color: cols[idx.color],
-                  shipped2025: parseInt(cols[idx.shipped2025]) || 0,
-                  restockTarget: idx.restockTarget !== -1 ? (parseInt(cols[idx.restockTarget]) || 0) : 0,
-                  suggestedRestock: idx.suggestedRestock !== -1 ? (parseInt(cols[idx.suggestedRestock]) || 0) : 0,
-                  initialStock: calculatedInitialStock, 
+              if (!cols[idx.product]) return;
+              const newRef = doc(collection(db, 'everise_system', 'shared', 'restock_data'));
+              batch.set(newRef, {
+                  date: cols[idx.date] || new Date().toISOString().split('T')[0],
+                  product: cols[idx.product].toUpperCase(), color: cols[idx.color] || '',
+                  amount: parseInt(cols[idx.qty]) || 0, note: cols[idx.note] || '整櫃匯入',
                   timestamp: Date.now()
               });
           });
-          
-          await batchInsert.commit();
-          alert("✅ 庫存期初資料建檔完成！系統已套用自動扣帳邏輯。");
-          setViewMode('inventoryOverview');
-
-      } catch (error) {
-          alert(`❌ 匯入失敗！\n錯誤原因：${error.message}`);
-      } finally {
-          setIsUploadingBase(false);
-          e.target.value = '';
-      }
+          await batch.commit();
+          alert("✅ 整櫃進貨資料已成功匯入並加總至庫存！");
+      } catch (error) { alert(`❌ 匯入失敗：${error.message}`); }
+      e.target.value = '';
   };
 
-  // --- Computed Base Lists ---
-  const sortedClients = useMemo(() => [...new Set(masterData.map(d => d.client))].sort(), [masterData]);
-  const availableMonths = useMemo(() => [...new Set(masterData.map(d => d.date?.substring(0, 7)))].filter(Boolean).sort().reverse(), [masterData]);
 
-  const allGroupedInvoices = useMemo(() => {
-    const res = {};
-    sortedClients.forEach(c => {
-        const rows = masterData.filter(d => d.client === c && d.shippedQty > 0);
-        const dates = [...new Set(rows.map(r => r.date))].sort((a, b) => new Date(a) - new Date(b));
-        
-        res[c] = dates.map((date, idx) => {
-            const items = rows.filter(r => r.date === date);
-            const conf = clientConfig[c] || { startNo: 1, prefix: c };
-            const paddedNo = String(conf.startNo + idx).padStart(3, '0');
-            const origin = items[0]?.origin || 'ER'; 
-            
-            const total = items.reduce((s, i) => s + Math.round(i.shippedQty * Math.round(i.price)), 0);
-            
-            return { 
-                id: `${c}-${date}`, 
-                date, 
-                cabinetNo: items[0]?.cabinetNo || `${conf.prefix}#${paddedNo}`, 
-                client: c, 
-                items, 
-                origin, 
-                total 
-            };
-        });
-    });
-    return res;
-  }, [masterData, clientConfig, sortedClients]);
+  // ==========================================
+  //                 Modals 區塊
+  // ==========================================
+  
+  // 智能攔截器 Modal
+  const MappingModal = () => {
+      const [localMappings, setLocalMappings] = useState({});
 
-  const displayedGroupedInvoices = useMemo(() => {
-      const res = {};
-      Object.keys(allGroupedInvoices).forEach(client => {
-          if (activeMasterClient !== 'ALL' && client !== activeMasterClient) return;
-          
-          let invs = allGroupedInvoices[client];
-          if (filterMonth !== 'ALL') invs = invs.filter(inv => inv.date.startsWith(filterMonth));
-          if (filterOrigin !== 'ALL') invs = invs.filter(inv => inv.origin === filterOrigin);
-          
-          if (invs.length > 0) res[client] = invs;
-      });
-      return res;
-  }, [allGroupedInvoices, filterMonth, filterOrigin, activeMasterClient]);
+      if (!showMappingModal) return null;
 
-  const filteredMasterData = useMemo(() => {
-    let d = masterData;
-    if (activeMasterClient !== 'ALL') d = d.filter(x => x.client === activeMasterClient);
-    if (filterMonth !== 'ALL') d = d.filter(x => x.date?.startsWith(filterMonth));
-    if (filterOrigin !== 'ALL') d = d.filter(x => x.origin === filterOrigin);
-    if (searchTerm) d = d.filter(x => x.product.toLowerCase().includes(searchTerm.toLowerCase()) || x.orderNo?.toLowerCase().includes(searchTerm.toLowerCase()));
-    return d.sort((a,b) => new Date(b.date) - new Date(a.date)); // 預設新到舊
-  }, [masterData, activeMasterClient, filterMonth, filterOrigin, searchTerm]);
+      const handleMapSelect = (rawKey, invId) => {
+          if(!invId) return;
+          const target = inventoryMaster.find(i => i.id === invId);
+          setLocalMappings(prev => ({ ...prev, [rawKey]: { product: target.product, color: target.color } }));
+      };
 
-  // --- Batch PDF Download Logic ---
-  const downloadBatchPdfs = async () => {
-      const invoicesToDownload = [];
-      Object.values(displayedGroupedInvoices).forEach(invs => invoicesToDownload.push(...invs));
-
-      if (invoicesToDownload.length === 0) {
-          alert('當前篩選條件下沒有任何單據可以下載。請確認有過濾出資料！');
-          return;
-      }
-
-      if (!window.confirm(`準備批次下載 ${invoicesToDownload.length} 張 SA PDF。\n(如為首次使用，瀏覽器可能會阻擋「自動下載多個檔案」，請務必點擊【允許】。)`)) return;
-
-      setIsDownloadingPdf(true);
-      try {
-          const html2pdf = await loadHtml2Pdf();
-          for (let i = 0; i < invoicesToDownload.length; i++) {
-              const inv = invoicesToDownload[i];
-              const element = document.getElementById(`invoice-capture-${inv.id}`);
-              if (!element) continue;
-
-              const filename = inv.origin === 'China' ? `${inv.cabinetNo}CN.pdf` : `${inv.cabinetNo}.pdf`;
-
-              await html2pdf().set({
-                  margin: 0,
-                  filename: filename,
-                  image: { type: 'jpeg', quality: 0.98 },
-                  html2canvas: { scale: 2, useCORS: true, logging: false },
-                  jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-              }).from(element).save();
-
-              await new Promise(resolve => setTimeout(resolve, 800)); 
+      const handleConfirm = () => {
+          // 檢查是否全部對應完畢
+          if (Object.keys(localMappings).length < unmappedItems.length) {
+              if(!window.confirm("還有品項未選擇對應！未對應的品項將以「原名」存入且無法扣除庫存。確定繼續？")) return;
           }
-      } catch (error) {
-          console.error("PDF generation failed:", error);
-          alert("下載過程中發生錯誤，請稍後再試。");
-      }
-      setIsDownloadingPdf(false);
-  };
-
-  // --- Revenue Logic ---
-  useEffect(() => {
-    const stats = {};
-    const process = (date, client, amount, source) => {
-        const d = new Date(date);
-        if (isNaN(d.getTime())) return;
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        if (!stats[key]) stats[key] = { monthKey: key, year: d.getFullYear(), month: d.getMonth() + 1, total: 0, warehouseTotal: 0, chinaTotal: 0, otherTotal: 0, clientMap: {} };
-        const m = stats[key];
-        m.total += amount;
-        
-        const srcLower = (source || '').toLowerCase();
-        if (srcLower === 'china') {
-            m.chinaTotal += amount;
-        } else if (srcLower === 'warehouse' || srcLower === 'er') {
-            m.warehouseTotal += amount;
-        } else {
-            m.otherTotal += amount;
-        }
-        
-        if (!m.clientMap[client]) m.clientMap[client] = { total: 0, sources: {} };
-        m.clientMap[client].total += amount;
-        
-        let displaySource = 'Other';
-        if (srcLower === 'china') displaySource = 'China';
-        else if (srcLower === 'warehouse' || srcLower === 'er') displaySource = 'Warehouse';
-        
-        m.clientMap[client].sources[displaySource] = (m.clientMap[client].sources[displaySource] || 0) + amount;
-    };
-
-    masterData.forEach(d => {
-        const origin = d.origin || 'Warehouse'; 
-        const roundedAmount = Math.round(d.shippedQty * Math.round(d.price));
-        process(d.date, d.client, roundedAmount, origin);
-    });
-    
-    manualRevenueData.forEach(d => process(d.date, d.client, Math.round(d.amount), d.source || "China"));
-
-    setRevenueData(Object.values(stats).map(m => ({
-        ...m, clients: Object.entries(m.clientMap).map(([client, data]) => ({ client, amount: data.total, sources: data.sources })).sort((a,b) => b.amount - a.amount)
-    })).sort((a,b) => b.monthKey.localeCompare(a.monthKey)));
-  }, [masterData, manualRevenueData]);
-
-  const callGemini = async () => {
-    const keyToUse = userApiKey || apiKeyDefault;
-    if (!aiPrompt.trim() || !keyToUse) return;
-    setIsAiLoading(true);
-    try {
-      const dataSummary = filteredMasterData.slice(0, 50).map(d => ({ date: d.date, client: d.client, product: d.product, qty: d.shippedQty, price: d.price }));
-      const revenueSummary = revenueData.slice(0, 6).map(r => `${r.monthKey}: ${r.total} THB`).join('\n');
-      const systemPrompt = `您是專業分析師。單位均為泰銖(THB)。營收摘要：\n${revenueSummary}\n明細參考：${JSON.stringify(dataSummary)}`;
-      
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${keyToUse}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: `${systemPrompt}\n\n問題：${aiPrompt}` }] }] })
-      });
-      const data = await res.json();
-      setAiResponse(data.candidates?.[0]?.content?.parts?.[0]?.text || "無回應");
-    } catch (e) { setAiResponse("錯誤：" + e.message); }
-    finally { setIsAiLoading(false); }
-  };
-
-  // --- Components ---
-  const Navbar = () => (
-    <>
-      <div className="bg-slate-900 border-b border-slate-700 sticky top-0 z-50 px-6 py-3 flex justify-between items-center print:hidden">
-        <div className="flex items-center gap-6">
-          <h1 className="text-xl font-black text-white flex items-center gap-2"><Database className="w-6 h-6 text-emerald-400" /> EVERISE</h1>
-          <div className="flex bg-slate-800 p-1 rounded-lg overflow-x-auto">
-            {[
-              { id: 'dashboard', label: 'SA 請款單', icon: LayoutDashboard },
-              { id: 'inventoryOverview', label: '庫存總覽', icon: Package },
-              { id: 'inventoryLog', label: '庫存流水', icon: ListOrdered },
-              { id: 'masterTable', label: '年度明細編輯', icon: TableIcon },
-              { id: 'revenueStats', label: '營業額統計', icon: TrendingUp }, 
-              { id: 'dataManagement', label: '資料來源', icon: Archive },
-              { id: 'settings', label: '設定', icon: Settings },
-            ].map(tab => (
-              <button key={tab.id} onClick={() => setViewMode(tab.id)} className={`px-4 py-2 rounded-md text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${viewMode === tab.id ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}>
-                <tab.icon className="w-4 h-4" /> {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="flex gap-3 items-center">
           
-          {/* 上傳基礎庫存 Excel/CSV */}
-          <label className={`bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg cursor-pointer font-bold text-xs flex items-center gap-2 shadow-sm transition-all ${isUploadingBase ? 'opacity-50 pointer-events-none' : ''}`}>
-            {isUploadingBase ? <Loader2 className="w-4 h-4 animate-spin" /> : <TableIcon className="w-4 h-4" />}
-            {isUploadingBase ? '建檔中...' : '匯入初始庫存表'}
-            <input type="file" accept=".csv" className="hidden" onChange={handleInventoryBaseUpload} disabled={isUploadingBase} />
-          </label>
+          const newMappings = { ...productMappings, ...localMappings };
+          const processedRows = pendingUploadData.map(row => {
+              if (row.origin === 'ER') {
+                  const dictKey = `${row._rawProduct}|${row._rawColor}`;
+                  if (newMappings[dictKey]) {
+                      row.product = newMappings[dictKey].product;
+                      row.color = newMappings[dictKey].color;
+                  }
+              }
+              return row;
+          });
+          
+          finalizeUpload(processedRows, newMappings);
+      };
 
-          <label className={`bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg cursor-pointer font-bold text-xs flex items-center gap-2 shadow-sm transition-all ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
-            {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-            {isUploading ? '處理中...' : '匯入出貨單 (扣庫存)'}
-            <input type="file" accept=".csv" multiple className="hidden" onChange={handleFileUpload} disabled={isUploading} />
-          </label>
-        </div>
-      </div>
-    </>
-  );
+      return (
+          <div className="fixed inset-0 bg-black/70 z-[100] flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden max-h-[85vh] flex flex-col">
+                  <div className="p-6 bg-red-50 border-b border-red-100">
+                      <h3 className="text-xl font-black text-red-700 flex items-center gap-2"><ShieldAlert /> ⚠️ 發現未知品名，請手動對應庫存</h3>
+                      <p className="text-sm text-red-600 mt-2 font-bold">泰國端輸入了系統不認識的名稱。請在下方選擇對應的庫存品項，選擇後系統將永久記住此規則。</p>
+                  </div>
+                  <div className="p-6 overflow-auto flex-1 space-y-4">
+                      {unmappedItems.map((item, idx) => (
+                          <div key={idx} className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col md:flex-row gap-4 items-center justify-between">
+                              <div className="flex-1">
+                                  <div className="text-xs text-slate-400 font-bold mb-1">泰國輸入 (錯誤)：</div>
+                                  <div className="font-mono text-red-600 font-black">{item.rawProduct} <span className="text-slate-500">({item.rawColor})</span></div>
+                              </div>
+                              <ArrowLeft className="w-5 h-5 text-slate-300 hidden md:block transform rotate-180" />
+                              <div className="flex-1 w-full">
+                                  <div className="text-xs text-emerald-600 font-bold mb-1">對應至系統標準庫存：</div>
+                                  <select 
+                                      className="w-full border-2 border-emerald-200 bg-emerald-50 text-emerald-800 p-2 rounded-lg font-bold"
+                                      onChange={(e) => handleMapSelect(item.rawKey, e.target.value)}
+                                  >
+                                      <option value="">-- 請選擇標準品項 --</option>
+                                      {inventoryMaster.sort((a,b)=>a.product.localeCompare(b.product)).map(inv => (
+                                          <option key={inv.id} value={inv.id}>{inv.product} - {inv.color}</option>
+                                      ))}
+                                  </select>
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+                  <div className="p-6 bg-slate-50 border-t flex justify-end gap-3">
+                      <button onClick={() => {setShowMappingModal(false); setPendingUploadData(null);}} className="px-6 py-2 rounded-lg font-bold text-slate-500 hover:bg-slate-200">取消匯入</button>
+                      <button onClick={handleConfirm} className="px-8 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold shadow-lg">確認對應並繼續匯入</button>
+                  </div>
+              </div>
+          </div>
+      );
+  };
 
+  // 手動進貨/盤點 Modal
+  const RestockModal = ({ show, onClose }) => {
+      const [product, setProduct] = useState('');
+      const [amount, setAmount] = useState('');
+      const [note, setNote] = useState('');
+      
+      if(!show) return null;
+      
+      const handleSave = async () => {
+          if(!product || !amount) return alert("請填寫品項與數量");
+          const [p, c] = product.split('|');
+          await addDoc(collection(db, 'everise_system', 'shared', 'restock_data'), {
+              date: new Date().toISOString().split('T')[0],
+              product: p, color: c || '', amount: parseInt(amount), note, timestamp: Date.now()
+          });
+          onClose(); alert("✅ 數量已更新！");
+      };
+
+      return (
+          <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+                  <h3 className="text-xl font-black text-slate-800 flex items-center gap-2 mb-6"><Package /> 手動登記進貨 / 盤點微調</h3>
+                  <div className="space-y-4">
+                      <div>
+                          <label className="block text-xs font-bold text-slate-500 mb-1">選擇品項</label>
+                          <select className="w-full border rounded-lg px-3 py-2 font-bold" value={product} onChange={e=>setProduct(e.target.value)}>
+                              <option value="">-- 請選擇 --</option>
+                              {inventoryMaster.map(inv => <option key={inv.id} value={`${inv.product}|${inv.color}`}>{inv.product} ({inv.color})</option>)}
+                          </select>
+                      </div>
+                      <div>
+                          <label className="block text-xs font-bold text-slate-500 mb-1">增減數量 (+ 進貨 / - 短少盤虧)</label>
+                          <input type="number" className="w-full border rounded-lg px-3 py-2 font-mono text-lg font-bold" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="例如: 5000 或 -50"/>
+                      </div>
+                      <div>
+                          <label className="block text-xs font-bold text-slate-500 mb-1">備註說明</label>
+                          <input type="text" className="w-full border rounded-lg px-3 py-2" value={note} onChange={e=>setNote(e.target.value)} placeholder="例如: 4月船期 或 盤點損耗"/>
+                      </div>
+                  </div>
+                  <div className="mt-8 flex justify-end gap-3">
+                      <button onClick={onClose} className="px-6 py-2 rounded-lg font-bold text-slate-500">取消</button>
+                      <button onClick={handleSave} className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold shadow">確認送出</button>
+                  </div>
+              </div>
+          </div>
+      );
+  };
+
+
+  // ==========================================
+  //                 Views 區塊
+  // ==========================================
+
+  // 📦 自訂月結匯出中心 (備份神器)
+  const MonthlyExportView = () => {
+      const [exportMonth, setExportMonth] = useState('ALL');
+      const [selectedItems, setSelectedItems] = useState([]);
+      
+      const handleToggleAll = (e) => {
+          if (e.target.checked) setSelectedItems(inventoryMaster.map(i => i.id));
+          else setSelectedItems([]);
+      };
+
+      const handleExport = () => {
+          if (selectedItems.length === 0) return alert("請至少勾選一個品項！");
+          
+          const csvRows = ["品名,顏色,匯出月份,期初(或累積)庫存,期間入庫量,期間出庫量,期末結算庫存"];
+          
+          inventoryMaster.filter(inv => selectedItems.includes(inv.id)).forEach(inv => {
+              // 篩選指定月份的紀錄
+              const isTargetMonth = (dateStr) => exportMonth === 'ALL' || dateStr?.startsWith(exportMonth);
+              
+              const mOut = masterData.filter(d => d.origin === 'ER' && d.status !== '作廢' && d.product === inv.product && d.color === inv.color);
+              const mIn = restockData.filter(d => d.product === inv.product && d.color === inv.color);
+              
+              // 計算該月之前的累積 (作為期初)
+              const outBefore = mOut.filter(d => exportMonth !== 'ALL' && d.date < exportMonth + '-01').reduce((s, d)=>s+d.shippedQty, 0);
+              const inBefore = mIn.filter(d => exportMonth !== 'ALL' && d.date < exportMonth + '-01').reduce((s, d)=>s+d.amount, 0);
+              const stockBeforeMonth = (inv.initialStock || 0) + inBefore - outBefore;
+
+              // 計算該月期間的變動
+              const outDuring = mOut.filter(d => isTargetMonth(d.date)).reduce((s, d)=>s+d.shippedQty, 0);
+              const inDuring = mIn.filter(d => isTargetMonth(d.date)).reduce((s, d)=>s+d.amount, 0);
+              
+              const finalStock = stockBeforeMonth + inDuring - outDuring;
+
+              csvRows.push(`${inv.product},${inv.color},${exportMonth},${stockBeforeMonth},${inDuring},${outDuring},${finalStock}`);
+          });
+
+          const blob = new Blob(["\uFEFF" + csvRows.join("\n")], { type: 'text/csv;charset=utf-8;' });
+          const link = document.createElement("a");
+          link.href = URL.createObjectURL(blob);
+          link.download = `庫存月結備份_${exportMonth}_${new Date().toISOString().split('T')[0]}.csv`;
+          link.click();
+      };
+
+      return (
+          <div className="p-8 max-w-5xl mx-auto min-h-screen bg-slate-50 animate-in fade-in">
+              <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-8">
+                  <h2 className="text-3xl font-black text-slate-800 mb-2 flex items-center gap-3"><FileOutput className="w-8 h-8 text-blue-600" /> 月結備份匯出中心</h2>
+                  <p className="text-slate-500 mb-8 font-bold">請定期至此處將庫存明細打包匯出至您的電腦或 Google Drive 永久備份。</p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                      <div className="col-span-1 border-r border-slate-100 pr-8">
+                          <h4 className="font-black text-slate-700 mb-4">1. 選擇結算月份</h4>
+                          <select value={exportMonth} onChange={e=>setExportMonth(e.target.value)} className="w-full border-2 border-slate-200 p-3 rounded-xl font-bold bg-slate-50">
+                              <option value="ALL">全部累積至今</option>
+                              {availableMonths.map(m => <option key={m} value={m}>{m} 月</option>)}
+                          </select>
+                          
+                          <button onClick={handleExport} className="w-full mt-8 bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl font-black text-lg shadow-xl shadow-blue-200 transition-all flex items-center justify-center gap-2">
+                              <Download /> 一鍵匯出 CSV 備份
+                          </button>
+                      </div>
+                      
+                      <div className="col-span-2">
+                          <div className="flex justify-between items-center mb-4">
+                              <h4 className="font-black text-slate-700">2. 勾選需匯出結算的品項</h4>
+                              <label className="flex items-center gap-2 cursor-pointer text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-lg">
+                                  <input type="checkbox" onChange={handleToggleAll} checked={selectedItems.length === inventoryMaster.length && inventoryMaster.length > 0}/> 全選
+                              </label>
+                          </div>
+                          <div className="h-[400px] overflow-auto border-2 border-slate-100 rounded-xl bg-slate-50 p-4 space-y-2">
+                              {inventoryMaster.map(inv => (
+                                  <label key={inv.id} className="flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-lg cursor-pointer hover:border-blue-300">
+                                      <input type="checkbox" className="w-5 h-5 text-blue-600" 
+                                          checked={selectedItems.includes(inv.id)} 
+                                          onChange={(e) => {
+                                              if(e.target.checked) setSelectedItems([...selectedItems, inv.id]);
+                                              else setSelectedItems(selectedItems.filter(id => id !== inv.id));
+                                          }} 
+                                      />
+                                      <span className="font-bold text-slate-700">{inv.product}</span>
+                                      <span className="text-sm text-slate-500 border-l border-slate-200 pl-3">{inv.color}</span>
+                                  </label>
+                              ))}
+                          </div>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      );
+  };
+
+  const InventoryOverviewView = () => {
+      const filteredInv = computedInventory.filter(inv => 
+          (filterProduct === 'ALL' || inv.product === filterProduct) &&
+          (inv.product.toLowerCase().includes(searchTerm.toLowerCase()) || inv.color.toLowerCase().includes(searchTerm.toLowerCase()))
+      );
+
+      const uniqueProducts = [...new Set(inventoryMaster.map(i => i.product))].sort();
+
+      return (
+          <div className="p-6 animate-in fade-in duration-500 min-h-screen bg-slate-50">
+              <div className="mb-6 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 print:hidden">
+                  <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2">
+                      <Package className="w-6 h-6 text-blue-600" /> 老闆專屬庫存總覽
+                  </h2>
+                  <div className="flex flex-wrap gap-2">
+                      <select value={filterProduct} onChange={e=>setFilterProduct(e.target.value)} className="border border-slate-300 rounded-lg px-3 font-bold text-sm bg-white">
+                          <option value="ALL">所有品項</option>
+                          {uniqueProducts.map(p => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                      <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                          <input type="text" placeholder="關鍵字搜尋..." className="pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm w-40" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                      </div>
+                      <button onClick={() => window.print()} className="bg-slate-800 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 text-sm"><Printer className="w-4 h-4"/> 列印</button>
+                      <button onClick={() => setViewMode('monthlyExport')} className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 text-sm shadow-sm"><FileDown className="w-4 h-4"/> 備份匯出中心</button>
+                      <button onClick={() => setShowAddInvModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 text-sm shadow-sm"><Plus className="w-4 h-4" /> 新增品項</button>
+                  </div>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden" id="print-area">
+                  <table className="w-full text-left text-sm border-collapse">
+                      <thead className="bg-slate-800 text-white sticky top-0 z-10 text-xs font-bold tracking-wider">
+                          <tr>
+                              <th className="p-4 w-1/4">品名 (Product)</th>
+                              <th className="p-4 w-40">顏色 (Color)</th>
+                              <th className="p-4 text-center text-slate-300 w-24">2025 出貨量</th>
+                              <th className="p-4 text-center text-blue-300 w-24">2026 已出貨</th>
+                              <th className="p-4 text-center text-emerald-300 w-28">當前實際庫存</th>
+                              <th className="p-4 text-center text-yellow-300 w-24">安全水位</th>
+                              <th className="p-4 text-center text-indigo-300 w-24">建議補貨量</th>
+                              <th className="p-4 text-center w-32">庫存狀態</th>
+                          </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-medium">
+                          {filteredInv.map((inv, i) => {
+                              let rowBg = i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50';
+                              if (inv.stockStatus === 'negative') rowBg = 'bg-red-50/80';
+                              else if (inv.stockStatus === 'low') rowBg = 'bg-yellow-50/80';
+
+                              let numColor = 'text-emerald-600';
+                              if (inv.stockStatus === 'negative') numColor = 'text-red-600';
+                              else if (inv.stockStatus === 'low') numColor = 'text-yellow-600';
+
+                              return (
+                                  <tr key={inv.id} className={`hover:bg-slate-50 transition-colors ${rowBg}`}>
+                                      <td className="p-4 font-black text-slate-700">{inv.product}</td>
+                                      <td className="p-4 text-slate-600">{inv.color}</td>
+                                      <td className="p-4 text-center font-mono text-slate-400">{inv.shipped2025.toLocaleString()}</td>
+                                      <td className="p-4 text-center font-mono font-bold text-blue-600">{inv.totalShipped.toLocaleString()}</td>
+                                      <td className={`p-4 text-center font-mono font-black text-lg ${numColor}`}>{inv.currentStock.toLocaleString()}</td>
+                                      <td className="p-4 text-center font-mono font-bold text-slate-500">{inv.restockTarget > 0 ? inv.restockTarget.toLocaleString() : '-'}</td>
+                                      <td className="p-4 text-center font-mono font-black text-indigo-600">{inv.suggestedRestock > 0 ? inv.suggestedRestock.toLocaleString() : '-'}</td>
+                                      <td className="p-4 text-center">
+                                          {inv.stockStatus === 'negative' ? (
+                                              <span className="inline-flex items-center gap-1 bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-black border border-red-200 animate-pulse"><AlertTriangle className="w-3 h-3" /> 欠貨/負數</span>
+                                          ) : inv.stockStatus === 'low' ? (
+                                              <span className="inline-flex items-center gap-1 bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-black border border-yellow-200"><AlertTriangle className="w-3 h-3" /> 需補貨</span>
+                                          ) : (
+                                              <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-xs font-bold border border-emerald-100"><CheckCircle2 className="w-3 h-3" /> 充足</span>
+                                          )}
+                                      </td>
+                                  </tr>
+                              );
+                          })}
+                      </tbody>
+                  </table>
+              </div>
+          </div>
+      );
+  };
+
+  const InventoryLogView = () => {
+      const [logFilterProduct, setLogFilterProduct] = useState('ALL');
+      const uniqueProducts = [...new Set(masterData.map(i => i.product))].sort();
+
+      const logData = filteredMasterData.filter(d => 
+          d.origin === 'ER' && d.status !== '作廢' &&
+          (logFilterProduct === 'ALL' || d.product === logFilterProduct)
+      );
+
+      return (
+          <div className="p-6 animate-in fade-in duration-500 min-h-screen bg-white">
+              <div className="mb-6 flex justify-between items-center print:hidden">
+                  <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2">
+                      <ListOrdered className="w-6 h-6 text-indigo-600" /> 出庫流水紀錄 (Log)
+                  </h2>
+                  <div className="flex gap-2">
+                     <select value={logFilterProduct} onChange={e=>setLogFilterProduct(e.target.value)} className="border border-slate-300 rounded-lg px-3 font-bold text-sm bg-slate-50">
+                          <option value="ALL">全部品項</option>
+                          {uniqueProducts.map(p => <option key={p} value={p}>{p}</option>)}
+                     </select>
+                     <div className="relative">
+                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                        <input type="text" placeholder="搜尋客戶或櫃號..." className="pl-8 pr-4 py-2 border rounded-lg text-sm w-48 bg-slate-50" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                     </div>
+                  </div>
+              </div>
+              
+              <div className="border border-slate-300 rounded-xl overflow-hidden shadow-sm">
+                  <table className="w-full text-left text-sm border-collapse">
+                      <thead className="bg-indigo-50 sticky top-0 z-10 text-xs font-black text-indigo-900 uppercase tracking-wider border-b border-indigo-100">
+                          <tr>
+                              <th className="p-3 w-28">扣帳日期</th>
+                              <th className="p-3 w-24">出貨客戶</th>
+                              <th className="p-3">品名</th>
+                              <th className="p-3 w-32">顏色</th>
+                              <th className="p-3 w-32 text-right text-red-600">扣除數量 (-Y)</th>
+                              <th className="p-3 w-32 text-center">對應 SA 櫃號</th>
+                          </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                          {logData.map((d) => (
+                              <tr key={d.id} className="hover:bg-indigo-50/30 transition-colors">
+                                  <td className="p-3 font-mono text-slate-500">{d.date}</td>
+                                  <td className="p-3 font-black text-slate-700">{d.client}</td>
+                                  <td className="p-3 font-bold text-slate-800">{d.product}</td>
+                                  <td className="p-3 text-slate-600">{d.color}</td>
+                                  <td className="p-3 text-right font-mono font-black text-red-500">-{d.shippedQty}</td>
+                                  <td className="p-3 text-center text-xs font-bold text-indigo-600 bg-indigo-50/50 rounded">
+                                      {d.cabinetNo || allGroupedInvoices[d.client]?.find(inv => inv.date === d.date)?.cabinetNo || '-'}
+                                  </td>
+                              </tr>
+                          ))}
+                          {logData.length === 0 && <tr><td colSpan="6" className="p-8 text-center text-slate-400">目前沒有出庫紀錄</td></tr>}
+                      </tbody>
+                  </table>
+              </div>
+          </div>
+      );
+  };
+
+
+  // --- 舊有的 Views (Dashboard, MasterTable, InvoiceTemplate) ---
   const Dashboard = () => {
-    const updateStartNo = async (client, currentStart, count) => {
-        const nextStart = currentStart + count;
-        if (window.confirm(`確認要更新 ${client} 的起始櫃號嗎？\n\n目前起始：${currentStart}\n本批單數：${count}\n\n更新後下次將從 [ ${nextStart} ] 開始編號。`)) {
-            const newConfig = { ...clientConfig };
-            if (!newConfig[client]) {
-                newConfig[client] = { startNo: nextStart, prefix: client };
-            } else {
-                newConfig[client].startNo = nextStart;
-            }
-            await setDoc(doc(db, 'everise_system', 'shared', 'settings', 'config'), { clientConfig: newConfig }, { merge: true });
-        }
-    };
-
-    const manualEditStartNo = async (client) => {
-        const current = clientConfig[client]?.startNo || 1;
-        const input = prompt(`請手動輸入 ${client} 的起始櫃號：`, current);
-        if (input && !isNaN(input)) {
-            const newNo = parseInt(input);
-            const newConfig = { ...clientConfig };
-            if (!newConfig[client]) newConfig[client] = { startNo: newNo, prefix: client };
-            else newConfig[client].startNo = newNo;
-            await setDoc(doc(db, 'everise_system', 'shared', 'settings', 'config'), { clientConfig: newConfig }, { merge: true });
-        }
-    };
-
     const dashboardClients = Object.keys(displayedGroupedInvoices).sort();
-
     return (
       <div className="max-w-7xl mx-auto p-12 min-h-screen bg-slate-50">
         {dashboardClients.length === 0 ? (
@@ -956,57 +766,33 @@ const App = () => {
                     </div>
                     <div className="bg-white border border-slate-300 rounded-lg p-3 flex items-center gap-4 shadow-sm">
                         <div className="flex flex-col">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Current Start</span>
-                            <div className="flex items-center gap-2">
-                                <span className="font-mono font-black text-xl text-slate-700">#{config.startNo}</span>
-                                <button onClick={() => manualEditStartNo(client)} className="text-slate-300 hover:text-blue-500"><Edit3 className="w-3 h-3" /></button>
-                            </div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Current</span>
+                            <span className="font-mono font-black text-xl text-slate-700">#{config.startNo}</span>
                         </div>
                         <div className="h-8 w-px bg-slate-200"></div>
-                        <div className="flex flex-col">
-                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">This View</span>
-                             <span className="font-mono font-bold text-blue-600">+{currentInvoices.length} 張</span>
-                        </div>
-                        <div className="h-8 w-px bg-slate-200"></div>
-                        <button 
-                            onClick={() => updateStartNo(client, config.startNo, currentInvoices.length)}
-                            className="bg-slate-100 hover:bg-slate-800 hover:text-white text-slate-600 px-3 py-1.5 rounded-md text-xs font-bold transition-colors flex items-center gap-2"
-                        >
-                            <span>設定下次從</span>
-                            <span className="bg-yellow-300 text-black px-1 rounded font-mono">#{nextStartNo}</span>
-                            <span>開始</span>
-                            <ChevronRight className="w-3 h-3" />
+                        <button onClick={() => {
+                            if (window.confirm(`確認要更新 ${client} 的起始櫃號嗎？下次將從 [ ${nextStartNo} ] 開始。`)) {
+                                updateConfig('clientConfig', { ...clientConfig, [client]: { ...config, startNo: nextStartNo } });
+                            }
+                        }} className="bg-slate-100 hover:bg-slate-800 hover:text-white text-slate-600 px-3 py-1.5 rounded-md text-xs font-bold transition-colors">
+                            設定下次從 #{nextStartNo} 開始 <ChevronRight className="w-3 h-3 inline" />
                         </button>
                     </div>
                   </div>
-                  <button onClick={() => { setActiveClient(client); setViewMode('printAll'); }} className="bg-emerald-600 text-white px-5 py-3 rounded-xl font-bold flex items-center gap-2 shadow-md hover:bg-emerald-700 hover:-translate-y-0.5 transition-all">
-                    <Layers className="w-5 h-5" /> 列印畫面中所有 SA
-                  </button>
+                  <button onClick={() => { setActiveClient(client); setViewMode('printAll'); }} className="bg-emerald-600 text-white px-5 py-3 rounded-xl font-bold shadow-md hover:bg-emerald-700 transition-all flex items-center gap-2"><Layers className="w-5 h-5"/> 列印此畫面所有 SA</button>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                   {currentInvoices.map(inv => (
-                    <div key={inv.id} onClick={() => { setActiveClient(client); setSelectedInvoiceId(inv.id); setViewMode('preview'); }} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer group relative overflow-hidden">
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-slate-100 to-transparent rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-150"></div>
-                      <div className="relative z-10">
-                          <div className="flex justify-between items-start mb-4">
-                            <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-md text-xs font-black shadow-sm border border-blue-200">{inv.cabinetNo}</span>
-                            {inv.origin === 'China' ? (
-                                <span className="bg-red-100 text-red-600 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 border border-red-200"><Plane className="w-3 h-3"/> CN</span>
-                            ) : (
-                                <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[10px] font-bold border border-slate-200">ER</span>
-                            )}
-                          </div>
-                          <div className="text-2xl font-black text-slate-800 mb-1">{inv.date}</div>
-                          <div className="text-xs text-slate-400 font-bold flex items-center gap-1">
-                              <Package className="w-3 h-3" /> {inv.items.length} 筆明細
-                          </div>
-                          <div className="mt-6 pt-4 border-t border-slate-100 text-right">
-                            <span className="text-2xl font-black text-emerald-600 tracking-tight">
-                                <span className="text-xs text-emerald-400 font-normal mr-1">THB</span>
-                                {Math.round(inv.total).toLocaleString()}
-                            </span>
-                          </div>
+                    <div key={inv.id} onClick={() => { setActiveClient(client); setSelectedInvoiceId(inv.id); setViewMode('preview'); }} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-xl cursor-pointer group relative overflow-hidden">
+                      <div className="flex justify-between items-start mb-4">
+                        <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-md text-xs font-black shadow-sm">{inv.cabinetNo}</span>
+                        {inv.origin === 'China' ? <span className="bg-red-100 text-red-600 px-2 py-0.5 rounded text-[10px] font-bold">CN</span> : <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[10px] font-bold">ER</span>}
+                      </div>
+                      <div className="text-2xl font-black text-slate-800 mb-1">{inv.date}</div>
+                      <div className="text-xs text-slate-400 font-bold flex items-center gap-1"><Package className="w-3 h-3" /> {inv.items.length} 筆明細</div>
+                      <div className="mt-6 pt-4 border-t border-slate-100 text-right">
+                        <span className="text-2xl font-black text-emerald-600 tracking-tight"><span className="text-xs text-emerald-400 mr-1">THB</span>{Math.round(inv.total).toLocaleString()}</span>
                       </div>
                     </div>
                   ))}
@@ -1019,158 +805,10 @@ const App = () => {
     );
   };
 
-  const InventoryOverviewView = () => {
-      const [localSearch, setLocalSearch] = useState('');
-      
-      const filteredInv = computedInventory.filter(inv => 
-          inv.product.toLowerCase().includes(localSearch.toLowerCase()) || 
-          inv.color.toLowerCase().includes(localSearch.toLowerCase())
-      );
-
-      return (
-          <div className="p-6 animate-in fade-in duration-500 min-h-screen bg-slate-50">
-              <div className="mb-6 flex justify-between items-center print:hidden">
-                  <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2">
-                      <Package className="w-6 h-6 text-blue-600" /> 2026 庫存自動監控總覽 (泰國倉)
-                  </h2>
-                  <div className="flex gap-3">
-                      <div className="relative">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-                          <input type="text" placeholder="搜尋品名或顏色..." className="pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm w-64 shadow-sm" value={localSearch} onChange={(e) => setLocalSearch(e.target.value)} />
-                      </div>
-                      <button 
-                          onClick={() => setShowAddInvModal(true)} 
-                          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm transition-colors text-sm"
-                      >
-                          <Plus className="w-4 h-4" /> 新增品項 / 顏色
-                      </button>
-                  </div>
-              </div>
-
-              {inventoryMaster.length === 0 ? (
-                  <div className="text-center py-20 bg-white rounded-xl border-2 border-dashed border-slate-300">
-                      <Package className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-                      <p className="text-lg font-bold text-slate-500 mb-2">尚未建立基礎庫存資料</p>
-                      <p className="text-sm text-slate-400">請點擊右上角「匯入初始庫存表」上傳老闆的格式 CSV 檔。</p>
-                  </div>
-              ) : (
-                  <div className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
-                      <table className="w-full text-left text-sm border-collapse">
-                          <thead className="bg-slate-800 text-white sticky top-0 z-10 text-xs font-bold tracking-wider">
-                              <tr>
-                                  <th className="p-4 w-1/4">品名 (Product)</th>
-                                  <th className="p-4 w-40">顏色 (Color)</th>
-                                  <th className="p-4 text-center text-slate-300 w-24">2025 出貨量<br/><span className="text-[10px] font-normal">(參考)</span></th>
-                                  <th className="p-4 text-center text-blue-300 w-24">2026 已出貨<br/><span className="text-[10px] font-normal">(系統累計)</span></th>
-                                  <th className="p-4 text-center text-emerald-300 w-28">當前實際庫存<br/><span className="text-[10px] font-normal">(自動結算)</span></th>
-                                  <th className="p-4 text-center text-yellow-300 w-24">安全水位<br/><span className="text-[10px] font-normal">(紅燈標準)</span></th>
-                                  <th className="p-4 text-center text-indigo-300 w-24">建議補貨量<br/><span className="text-[10px] font-normal">(採購建議)</span></th>
-                                  <th className="p-4 text-center w-32">庫存狀態</th>
-                              </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100 font-medium">
-                              {filteredInv.map((inv, i) => {
-                                  let rowBg = i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50';
-                                  if (inv.stockStatus === 'negative') rowBg = 'bg-red-50/80';
-                                  else if (inv.stockStatus === 'low') rowBg = 'bg-yellow-50/80';
-
-                                  let numColor = 'text-emerald-600';
-                                  if (inv.stockStatus === 'negative') numColor = 'text-red-600';
-                                  else if (inv.stockStatus === 'low') numColor = 'text-yellow-600';
-
-                                  return (
-                                      <tr key={inv.id} className={`hover:bg-slate-50 transition-colors ${rowBg}`}>
-                                          <td className="p-4 font-black text-slate-700">{inv.product}</td>
-                                          <td className="p-4 text-slate-600">{inv.color}</td>
-                                          <td className="p-4 text-center font-mono text-slate-400">{inv.shipped2025.toLocaleString()}</td>
-                                          <td className="p-4 text-center font-mono font-bold text-blue-600">{inv.shipped2026.toLocaleString()}</td>
-                                          <td className={`p-4 text-center font-mono font-black text-lg ${numColor}`}>
-                                              {inv.currentStock.toLocaleString()}
-                                          </td>
-                                          <td className="p-4 text-center font-mono font-bold text-slate-500">{inv.restockTarget > 0 ? inv.restockTarget.toLocaleString() : '-'}</td>
-                                          <td className="p-4 text-center font-mono font-black text-indigo-600">{inv.suggestedRestock > 0 ? inv.suggestedRestock.toLocaleString() : '-'}</td>
-                                          <td className="p-4 text-center">
-                                              {inv.stockStatus === 'negative' ? (
-                                                  <span className="inline-flex items-center gap-1 bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-black border border-red-200 shadow-sm animate-pulse">
-                                                      <AlertTriangle className="w-3 h-3" /> 欠貨/負數
-                                                  </span>
-                                              ) : inv.stockStatus === 'low' ? (
-                                                  <span className="inline-flex items-center gap-1 bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-black border border-yellow-200 shadow-sm">
-                                                      <AlertTriangle className="w-3 h-3" /> 需補貨
-                                                  </span>
-                                              ) : (
-                                                  <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-xs font-bold border border-emerald-100">
-                                                      <CheckCircle2 className="w-3 h-3" /> 充足
-                                                  </span>
-                                              )}
-                                          </td>
-                                      </tr>
-                                  );
-                              })}
-                          </tbody>
-                      </table>
-                  </div>
-              )}
-          </div>
-      );
-  };
-
-  const InventoryLogView = () => (
-      <div className="p-6 animate-in fade-in duration-500 min-h-screen bg-white">
-          <div className="mb-6 flex justify-between items-center print:hidden">
-              <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2">
-                  <ListOrdered className="w-6 h-6 text-indigo-600" /> 出庫流水紀錄 (Log)
-              </h2>
-              <div className="flex gap-2">
-                 <div className="relative">
-                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-                    <input type="text" placeholder="搜尋紀錄..." className="pl-8 pr-4 py-2 border rounded-lg text-sm w-48 bg-slate-50" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-                 </div>
-              </div>
-          </div>
-          
-          <div className="border border-slate-300 rounded-xl overflow-hidden shadow-sm">
-              <table className="w-full text-left text-sm border-collapse">
-                  <thead className="bg-indigo-50 sticky top-0 z-10 text-xs font-black text-indigo-900 uppercase tracking-wider border-b border-indigo-100">
-                      <tr>
-                          <th className="p-3 w-28">扣帳日期</th>
-                          <th className="p-3 w-24">客戶</th>
-                          <th className="p-3">品名</th>
-                          <th className="p-3 w-32">顏色</th>
-                          <th className="p-3 w-32 text-right text-red-600">扣除數量 (-Y)</th>
-                          <th className="p-3 w-32 text-center">對應櫃號</th>
-                          <th className="p-3 w-24 text-center">來源產地</th>
-                      </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                      {filteredMasterData.map((d, i) => (
-                          <tr key={d.id} className="hover:bg-indigo-50/30 transition-colors">
-                              <td className="p-3 font-mono text-slate-500">{d.date}</td>
-                              <td className="p-3 font-black text-slate-700">{d.client}</td>
-                              <td className="p-3 font-bold text-slate-800">{d.product}</td>
-                              <td className="p-3 text-slate-600">{d.color}</td>
-                              <td className="p-3 text-right font-mono font-black text-red-500">-{d.shippedQty}</td>
-                              <td className="p-3 text-center text-xs font-bold text-indigo-600 bg-indigo-50/50 rounded">
-                                  {d.cabinetNo || allGroupedInvoices[d.client]?.find(inv => inv.date === d.date)?.cabinetNo || '-'}
-                              </td>
-                              <td className="p-3 text-center text-xs font-bold">
-                                  {d.origin === 'China' ? <span className="text-orange-500">直發 (不扣倉)</span> : <span className="text-emerald-600">泰國倉</span>}
-                              </td>
-                          </tr>
-                      ))}
-                      {filteredMasterData.length === 0 && (
-                          <tr><td colSpan="7" className="p-8 text-center text-slate-400">目前沒有出庫紀錄</td></tr>
-                      )}
-                  </tbody>
-              </table>
-          </div>
-      </div>
-  );
-
   const MasterTableView = () => (
     <div className="p-6 animate-in fade-in duration-500 min-h-screen bg-slate-50">
       <div className="mb-6 flex justify-between items-center bg-white p-4 rounded-xl shadow-sm">
-        <h2 className="text-xl font-black text-slate-800 flex items-center gap-2"><Edit3 className="w-5 h-5 text-blue-600" /> 年度明細編輯 (Master Data)</h2>
+        <h2 className="text-xl font-black text-slate-800 flex items-center gap-2"><Edit3 className="w-5 h-5 text-blue-600" /> 年度明細與作廢管理</h2>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 w-4 h-4" />
           <input type="text" placeholder="搜尋..." className="pl-9 pr-4 py-2 border rounded-lg text-sm w-64" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
@@ -1181,66 +819,55 @@ const App = () => {
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-100 border-b border-slate-300 sticky top-0 z-10 text-xs font-bold text-slate-600">
               <tr>
-                <th className="p-3 w-24">日期</th>
-                <th className="p-3 w-20">客戶</th>
-                <th className="p-3 w-24">櫃號</th>
-                <th className="p-3 w-24">產地</th>
-                <th className="p-3">品名</th>
-                <th className="p-3 w-24">顏色</th>
-                <th className="p-3 w-32 text-right">出貨量 (支援算式)</th>
-                <th className="p-3 w-20 text-right">單價</th>
-                <th className="p-3 w-24">廠商</th>
-                <th className="p-3 w-24 text-center">操作</th>
+                <th className="p-3 w-24">日期</th><th className="p-3 w-20">客戶</th><th className="p-3 w-24">櫃號</th>
+                <th className="p-3 w-16">產地</th><th className="p-3">品名</th><th className="p-3 w-24">顏色</th>
+                <th className="p-3 w-24 text-right">出貨量</th><th className="p-3 w-16 text-center">狀態</th>
+                <th className="p-3 w-32 text-center">操作 (安全還原)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredMasterData.map(d => (
-                <tr key={d.id} className={`hover:bg-blue-50 ${editingId === d.id ? 'bg-yellow-50' : ''}`}>
+                <tr key={d.id} className={`hover:bg-blue-50 ${d.status === '作廢' ? 'opacity-50 bg-slate-50' : ''} ${editingId === d.id ? 'bg-yellow-50' : ''}`}>
                   {editingId === d.id ? (
                     <>
                       <td className="p-2"><input className="border rounded p-1 w-full" defaultValue={d.date} onChange={e => handleEditChange('date', e.target.value)} /></td>
                       <td className="p-2 font-bold">{d.client}</td>
-                      <td className="p-2"><input className="border rounded p-1 w-full font-bold text-blue-600" defaultValue={d.cabinetNo || allGroupedInvoices[d.client]?.find(inv => inv.date === d.date)?.cabinetNo || ''} onChange={e => handleEditChange('cabinetNo', e.target.value)} placeholder="手動覆蓋" /></td>
-                      <td className="p-2">
-                          <select className="border rounded p-1 w-full" defaultValue={d.origin || 'ER'} onChange={e => handleEditChange('origin', e.target.value)}>
-                              <option value="ER">ER</option>
-                              <option value="China">China</option>
-                          </select>
-                      </td>
+                      <td className="p-2"><input className="border rounded p-1 w-full font-bold text-blue-600" defaultValue={d.cabinetNo} onChange={e => handleEditChange('cabinetNo', e.target.value)} /></td>
+                      <td className="p-2 text-xs font-bold">{d.origin}</td>
                       <td className="p-2"><input className="border rounded p-1 w-full font-bold" autoFocus defaultValue={d.product} onChange={e => handleEditChange('product', e.target.value)} /></td>
                       <td className="p-2"><input className="border rounded p-1 w-full" defaultValue={d.color} onChange={e => handleEditChange('color', e.target.value)} /></td>
                       <td className="p-2"><input className="border rounded p-1 w-full text-right" type="text" defaultValue={d.shippedDisplay || d.shippedQty} onChange={e => handleEditChange('shippedDisplay', e.target.value)} /></td>
-                      <td className="p-2"><input className="border rounded p-1 w-full text-right" type="number" defaultValue={d.price} onChange={e => handleEditChange('price', parseFloat(e.target.value))} /></td>
-                      <td className="p-2"><input className="border rounded p-1 w-full" defaultValue={d.vendor} onChange={e => handleEditChange('vendor', e.target.value)} /></td>
+                      <td className="p-2 text-center">{d.status}</td>
                       <td className="p-2 text-center flex gap-1 justify-center">
-                        <button onClick={saveEdit} className="p-1 bg-green-500 text-white rounded hover:bg-green-600"><CheckCircle2 className="w-4 h-4" /></button>
-                        <button onClick={() => setEditingId(null)} className="p-1 bg-slate-300 text-white rounded hover:bg-slate-400"><X className="w-4 h-4" /></button>
+                        <button onClick={saveEdit} className="p-1 bg-green-500 text-white rounded"><CheckCircle2 className="w-4 h-4" /></button>
+                        <button onClick={() => setEditingId(null)} className="p-1 bg-slate-300 text-white rounded"><X className="w-4 h-4" /></button>
                       </td>
                     </>
                   ) : (
                     <>
                       <td className="p-3 text-slate-500">{d.date}</td>
                       <td className="p-3 font-bold text-slate-700">{d.client}</td>
-                      <td className="p-3 font-bold text-blue-600">
-                        {d.cabinetNo || allGroupedInvoices[d.client]?.find(inv => inv.date === d.date)?.cabinetNo || <span className="text-slate-300 italic text-xs">Auto</span>}
-                      </td>
-                      <td className="p-3 text-xs font-bold">{d.origin === 'China' ? <span className="text-red-500 bg-red-50 px-2 py-1 rounded">China</span> : <span className="text-blue-500 bg-blue-50 px-2 py-1 rounded">ER</span>}</td>
-                      <td className="p-3 font-bold text-slate-800">{d.product}</td>
+                      <td className="p-3 font-bold text-blue-600">{d.cabinetNo || '-'}</td>
+                      <td className="p-3 text-xs font-bold">{d.origin === 'China' ? <span className="text-red-500">CN</span> : <span className="text-blue-500">ER</span>}</td>
+                      <td className={`p-3 font-bold ${d.status === '作廢' ? 'line-through text-slate-400' : 'text-slate-800'}`}>{d.product}</td>
                       <td className="p-3 text-slate-600">{d.color}</td>
-                      <td className="p-3 text-right font-mono font-bold text-blue-600">{d.shippedDisplay || d.shippedQty}</td>
-                      <td className="p-3 text-right font-mono text-emerald-600">{d.price}</td>
-                      <td className="p-3 text-slate-400">{d.vendor}</td>
+                      <td className="p-3 text-right font-mono font-bold text-blue-600">{d.shippedQty}</td>
+                      <td className="p-3 text-center">
+                          {d.status === '作廢' && <span className="bg-red-100 text-red-600 px-2 py-0.5 rounded text-xs font-bold">已作廢</span>}
+                      </td>
                       <td className="p-3 text-center flex gap-2 justify-center">
-                        <button onClick={() => startEditing(d)} className="text-slate-300 hover:text-blue-500"><Edit3 className="w-4 h-4" /></button>
-                        <button onClick={() => handleDelete(d.id)} className="text-slate-300 hover:text-red-500"><Trash className="w-4 h-4" /></button>
+                        {d.status !== '作廢' && (
+                            <>
+                                <button onClick={() => startEditing(d)} className="text-slate-300 hover:text-blue-500" title="編輯明細"><Edit3 className="w-4 h-4" /></button>
+                                <button onClick={() => handleVoidOrder(d.id)} className="text-red-400 hover:text-red-600 font-bold text-xs bg-red-50 px-2 rounded border border-red-100 hover:bg-red-100" title="作廢此單並回補庫存">作廢回補</button>
+                            </>
+                        )}
+                        {d.status === '作廢' && <button onClick={() => handleDelete(d.id)} className="text-slate-300 hover:text-red-500" title="永久刪除"><Trash className="w-4 h-4" /></button>}
                       </td>
                     </>
                   )}
                 </tr>
               ))}
-              {filteredMasterData.length === 0 && (
-                  <tr><td colSpan="10" className="p-8 text-center text-slate-400">目前沒有符合篩選的資料</td></tr>
-              )}
             </tbody>
           </table>
         </div>
@@ -1249,7 +876,7 @@ const App = () => {
   );
 
   const InvoiceTemplate = ({ inv }) => (
-    <div className="w-[210mm] bg-white p-[10mm] min-h-[297mm] flex flex-col font-tnr text-black invoice-page mx-auto relative bg-contain bg-center bg-no-repeat">
+    <div className="w-[210mm] bg-white p-[10mm] min-h-[297mm] flex flex-col font-tnr text-black mx-auto">
       <div className="text-center mb-4 border-b-[2px] border-double border-black pb-2">
         <h1 className="text-2xl font-bold mb-1 uppercase">EVERISE MATERIAL INT'L LTD</h1>
         <p className="text-xs font-bold">TEL: 886-2-2741-9113 | FAX: 886-2-2727-9021</p>
@@ -1259,10 +886,7 @@ const App = () => {
       <div className="grid grid-cols-2 mb-4 text-base">
         <div className="space-y-1">
           <div className="border-b border-black pb-0.5"><span className="font-bold text-sm mr-2">TO:</span><span className="font-bold uppercase text-lg">{inv.client}</span></div>
-          <div className="border-b border-black pb-0.5 flex items-end">
-              <span className="font-bold text-sm mr-2">FROM:</span>
-              <span className="font-bold text-base">{inv.origin === 'China' ? 'China' : 'ER'}</span>
-          </div>
+          <div className="border-b border-black pb-0.5"><span className="font-bold text-sm mr-2">FROM:</span><span className="font-bold text-base">{inv.origin === 'China' ? 'China' : 'ER'}</span></div>
         </div>
         <div className="space-y-1 pl-4">
           <div className="border-b border-black pb-0.5 flex justify-between"><span>DATE:</span><span className="font-bold">{inv.date}</span></div>
@@ -1271,7 +895,7 @@ const App = () => {
       </div>
       <table className="w-full border-t-[2px] border-black">
         <tbody className="divide-y divide-black">
-          {inv.items.map((item, idx) => (
+          {inv.items.filter(i => i.status !== '作廢').map((item, idx) => (
             <React.Fragment key={idx}>
               <tr><td colSpan="3" className="pt-2 pb-1 font-bold text-lg">ORDER "{item.product}"</td></tr>
               <tr className="text-sm">
@@ -1284,212 +908,109 @@ const App = () => {
         </tbody>
       </table>
       <div className="mt-6 border-t-[4px] border-double border-black pt-4 flex justify-between items-baseline px-2">
-        <span className="font-bold text-xl">TOTAL:</span>
-        <span className="font-bold text-3xl">THB {Math.round(inv.total).toLocaleString()}</span>
+        <span className="font-bold text-xl">TOTAL:</span><span className="font-bold text-3xl">THB {Math.round(inv.total).toLocaleString()}</span>
       </div>
-      <div className="mt-auto border-t-2 border-black pt-2 flex justify-between">
-        <div className="font-bold underline text-xl tracking-widest uppercase">CASH</div>
-        <div className="text-[10px] font-bold uppercase">Shipping Advice Doc.</div>
-      </div>
-    </div>
-  );
-
-  const PrintAllView = () => (
-    <div className="bg-slate-200 min-h-screen py-10 print:bg-white print:p-0 flex flex-col items-center">
-      <div className="w-[210mm] mb-6 flex justify-between items-center print:hidden px-4">
-        <button onClick={() => setViewMode('dashboard')} className="text-slate-700 flex items-center gap-2 hover:text-blue-700 font-bold"><ArrowLeft className="w-5 h-5" /> 返回儀表板</button>
-        <button onClick={() => window.print()} className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 shadow-xl"><Printer className="w-5 h-5" /> 列印全部</button>
-      </div>
-      <div id="print-area">
-        {displayedGroupedInvoices[activeClient]?.map(inv => (
-          <div key={inv.id} className="print-page-break">
-            <InvoiceTemplate inv={inv} />
-          </div>
-        ))}
-      </div>
+      <div className="mt-auto border-t-2 border-black pt-2 flex justify-between"><div className="font-bold underline text-xl tracking-widest uppercase">CASH</div><div className="text-[10px] font-bold uppercase">Shipping Advice Doc.</div></div>
     </div>
   );
 
   return (
     <div className="bg-slate-50 min-h-screen font-sans text-slate-800">
-      <Navbar />
+      
+      {/* 導覽列 */}
+      <div className="bg-slate-900 border-b border-slate-700 sticky top-0 z-50 px-6 py-3 flex justify-between items-center print:hidden">
+        <div className="flex items-center gap-6">
+          <h1 className="text-xl font-black text-white flex items-center gap-2"><Database className="w-6 h-6 text-emerald-400" /> EVERISE</h1>
+          <div className="flex bg-slate-800 p-1 rounded-lg overflow-x-auto">
+            {[
+              { id: 'dashboard', label: 'SA 請款單', icon: LayoutDashboard },
+              { id: 'inventoryOverview', label: '庫存總覽', icon: Package },
+              { id: 'inventoryLog', label: '庫存流水', icon: ListOrdered },
+              { id: 'masterTable', label: '年度明細編輯', icon: TableIcon },
+              { id: 'revenueStats', label: '營業額統計', icon: TrendingUp }, 
+              { id: 'dataManagement', label: '進階管理', icon: Settings },
+            ].map(tab => (
+              <button key={tab.id} onClick={() => setViewMode(tab.id)} className={`px-4 py-2 rounded-md text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${viewMode === tab.id ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}>
+                <tab.icon className="w-4 h-4" /> {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex gap-2 items-center">
+          
+          <button onClick={() => setShowRestockModal(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg font-bold text-xs flex items-center gap-2 shadow-sm transition-all"><Plus className="w-4 h-4"/>單筆進貨微調</button>
+
+          <label className={`bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg cursor-pointer font-bold text-xs flex items-center gap-2 shadow-sm transition-all`}>
+            <Upload className="w-4 h-4" /> 整櫃入庫 (CSV)
+            <input type="file" accept=".csv" className="hidden" onChange={handleRestockUpload} />
+          </label>
+
+          <label className={`ml-4 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg cursor-pointer font-bold text-xs flex items-center gap-2 shadow-sm transition-all ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+            {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+            {isUploading ? '處理中...' : '匯入出貨單 (扣庫存)'}
+            <input type="file" accept=".csv" multiple className="hidden" onChange={handleFileUpload} disabled={isUploading} />
+          </label>
+        </div>
+      </div>
+
       <AiModal show={showAiModal} onClose={() => setShowAiModal(false)} prompt={aiPrompt} setPrompt={setAiPrompt} onSend={callGemini} response={aiResponse} loading={isAiLoading} hasKey={!!userApiKey} />
       <ManualRevenueModal show={showRevenueModal} onClose={() => setShowRevenueModal(false)} onSave={addManualRevenue} />
       <AddInventoryModal show={showAddInvModal} onClose={() => setShowAddInvModal(false)} onSave={handleAddInventoryItem} />
+      <RestockModal show={showRestockModal} onClose={() => setShowRestockModal(false)} />
+      <MappingModal />
       
       {/* 智慧全局篩選列：只在需要過濾的頁面顯示 */}
-      {viewMode !== 'inventoryOverview' && viewMode !== 'settings' && viewMode !== 'revenueStats' && (
+      {['dashboard', 'masterTable'].includes(viewMode) && (
           <div className="bg-white border-b border-slate-200 px-6 py-2 flex gap-4 items-center print:hidden shadow-sm sticky top-[60px] z-40">
               <Filter className="w-4 h-4 text-slate-400" />
               <span className="text-xs font-bold text-slate-400">全局篩選：</span>
-              
-              <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="border border-slate-300 rounded-md text-sm font-bold text-slate-700 py-1 px-2 focus:ring-2 focus:ring-emerald-500 outline-none">
-                  <option value="ALL">所有月份</option>
-                  {availableMonths.map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
-              
-              <select value={filterOrigin} onChange={e => setFilterOrigin(e.target.value)} className="border border-slate-300 rounded-md text-sm font-bold text-slate-700 py-1 px-2 focus:ring-2 focus:ring-emerald-500 outline-none">
-                  <option value="ALL">所有產地</option>
-                  <option value="China">China (中國直送)</option>
-                  <option value="ER">ER (倉庫)</option>
-              </select>
-
-              <select value={activeMasterClient} onChange={e => setActiveMasterClient(e.target.value)} className="border border-slate-300 rounded-md text-sm font-bold text-slate-700 py-1 px-2 focus:ring-2 focus:ring-emerald-500 outline-none">
-                  <option value="ALL">所有客戶</option>
-                  {sortedClients.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+              <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="border border-slate-300 rounded-md text-sm font-bold py-1 px-2"><option value="ALL">所有月份</option>{availableMonths.map(m => <option key={m} value={m}>{m}</option>)}</select>
+              <select value={filterOrigin} onChange={e => setFilterOrigin(e.target.value)} className="border border-slate-300 rounded-md text-sm font-bold py-1 px-2"><option value="ALL">所有產地</option><option value="China">China (直發)</option><option value="ER">ER (倉庫)</option></select>
+              <select value={activeMasterClient} onChange={e => setActiveMasterClient(e.target.value)} className="border border-slate-300 rounded-md text-sm font-bold py-1 px-2"><option value="ALL">所有客戶</option>{sortedClients.map(c => <option key={c} value={c}>{c}</option>)}</select>
 
               {viewMode === 'dashboard' && (
                   <div className="ml-auto">
-                      <button 
-                          onClick={downloadBatchPdfs} 
-                          disabled={isDownloadingPdf} 
-                          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors disabled:opacity-50 shadow-sm"
-                      >
+                      <button onClick={downloadBatchPdfs} disabled={isDownloadingPdf} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 shadow-sm">
                           {isDownloadingPdf ? <Loader2 className="w-3 h-3 animate-spin"/> : <Download className="w-3 h-3"/>}
-                          {isDownloadingPdf ? '載入產生中...' : '批次下載當前 SA (PDF)'}
+                          {isDownloadingPdf ? '產生中...' : '批次下載當前 SA (PDF)'}
                       </button>
                   </div>
               )}
           </div>
       )}
 
-      {/* 隱藏的 PDF 渲染容器，供批次下載時抓取截圖 */}
+      {/* 隱藏的 PDF 渲染容器 */}
       <div className="absolute top-[-9999px] left-[-9999px] opacity-0 pointer-events-none z-[-50]">
-          {Object.values(displayedGroupedInvoices).flat().map(inv => (
-              <div key={inv.id} id={`invoice-capture-${inv.id}`}>
-                  <InvoiceTemplate inv={inv} />
-              </div>
-          ))}
+          {Object.values(displayedGroupedInvoices).flat().map(inv => (<div key={inv.id} id={`invoice-capture-${inv.id}`}><InvoiceTemplate inv={inv} /></div>))}
       </div>
 
       <main>
         {viewMode === 'dashboard' && <Dashboard />}
-
         {viewMode === 'inventoryOverview' && <InventoryOverviewView />}
-
         {viewMode === 'inventoryLog' && <InventoryLogView />}
+        {viewMode === 'monthlyExport' && <MonthlyExportView />}
+        {viewMode === 'masterTable' && <MasterTableView />}
 
         {viewMode === 'revenueStats' && (
             <div className="max-w-6xl mx-auto space-y-6 p-6">
-                <div className="flex justify-between items-center">
-                    <h2 className="text-3xl font-black">年度營業額統計</h2>
-                    <button onClick={() => setShowRevenueModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"><Plus className="w-4 h-4"/>新增營收</button>
-                </div>
-                
+                <div className="flex justify-between items-center"><h2 className="text-3xl font-black">年度營業額統計</h2><button onClick={() => setShowRevenueModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"><Plus className="w-4 h-4"/>新增營收</button></div>
                 {revenueData.map((data) => (
-                    <div key={data.monthKey} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow">
-                        <div className="p-6 flex flex-col md:flex-row gap-6 items-start">
-                            <div className="w-full md:w-48 shrink-0 border-b md:border-b-0 md:border-r border-slate-100 pb-4 md:pb-0 md:pr-4">
-                                <div className="text-sm font-bold text-slate-400 uppercase tracking-wider">{data.year}</div>
-                                <div className="text-4xl font-black text-slate-800">{data.month} <span className="text-lg text-slate-400">月</span></div>
-                                <div className="mt-2 text-xl font-black text-emerald-600 flex items-center gap-1">
-                                    <span className="text-xs text-emerald-400">THB</span>
-                                    {data.total.toLocaleString()}
-                                </div>
-                                <div className="mt-4 h-2 bg-slate-100 rounded-full overflow-hidden w-full">
-                                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `100%` }}></div>
-                                </div>
-                                
-                                <div className="mt-4 space-y-2 border-t border-slate-100 pt-2">
-                                    <div className="flex justify-between items-center text-sm">
-                                        <span className="text-slate-400 font-bold flex items-center gap-1"><Package className="w-3 h-3" /> 倉庫</span>
-                                        <span className="font-mono font-bold text-blue-600">{data.warehouseTotal.toLocaleString()}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center text-sm">
-                                        <span className="text-slate-400 font-bold flex items-center gap-1"><MapPin className="w-3 h-3" /> 中國</span>
-                                        <span className="font-mono font-bold text-red-500">{data.chinaTotal.toLocaleString()}</span>
-                                    </div>
-                                    {data.otherTotal > 0 && (
-                                        <div className="flex justify-between items-center text-sm">
-                                            <span className="text-slate-400 font-bold flex items-center gap-1"><Hash className="w-3 h-3" /> 其他</span>
-                                            <span className="font-mono font-bold text-yellow-600">{data.otherTotal.toLocaleString()}</span>
-                                        </div>
-                                    )}
-                                </div>
+                    <div key={data.monthKey} className="bg-white rounded-xl shadow-sm border p-6 flex flex-col md:flex-row gap-6 items-start">
+                        <div className="w-full md:w-48 shrink-0 border-b md:border-b-0 md:border-r border-slate-100 pr-4">
+                            <div className="text-sm font-bold text-slate-400 uppercase">{data.year}</div><div className="text-4xl font-black text-slate-800">{data.month} <span className="text-lg text-slate-400">月</span></div>
+                            <div className="mt-2 text-xl font-black text-emerald-600 flex items-center gap-1"><span className="text-xs text-emerald-400">THB</span>{data.total.toLocaleString()}</div>
+                            <div className="mt-4 space-y-2 border-t border-slate-100 pt-2 text-sm">
+                                <div className="flex justify-between"><span className="text-slate-400 font-bold flex items-center gap-1"><Package className="w-3 h-3" /> 倉庫</span><span className="font-mono font-bold text-blue-600">{data.warehouseTotal.toLocaleString()}</span></div>
+                                <div className="flex justify-between"><span className="text-slate-400 font-bold flex items-center gap-1"><MapPin className="w-3 h-3" /> 中國</span><span className="font-mono font-bold text-red-500">{data.chinaTotal.toLocaleString()}</span></div>
                             </div>
-                            <div className="flex-1 w-full">
-                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                                    {data.clients.map((client, idx) => (
-                                        <div key={idx} className="flex flex-col bg-slate-50 p-2 rounded border border-slate-100 relative group">
-                                            <div className="flex justify-between items-baseline mb-1">
-                                                <span className="text-xs font-black text-slate-700 truncate">{idx + 1}. {client.client}</span>
-                                            </div>
-                                            <span className="text-sm font-mono text-emerald-600 font-bold block">{client.amount.toLocaleString()}</span>
-                                            
-                                            <div className="mt-1 flex h-1.5 w-full rounded-full overflow-hidden bg-slate-200">
-                                                {client.sources['Warehouse'] > 0 && (
-                                                    <div className="h-full bg-blue-400" style={{ width: `${(client.sources['Warehouse'] / client.amount) * 100}%` }} title={`Warehouse: ${client.sources['Warehouse'].toLocaleString()}`}></div>
-                                                )}
-                                                {client.sources['China'] > 0 && (
-                                                    <div className="h-full bg-red-400" style={{ width: `${(client.sources['China'] / client.amount) * 100}%` }} title={`China: ${client.sources['China'].toLocaleString()}`}></div>
-                                                )}
-                                                {client.sources['Other'] > 0 && (
-                                                    <div className="h-full bg-yellow-400" style={{ width: `${(client.sources['Other'] / client.amount) * 100}%` }} title={`Other: ${client.sources['Other'].toLocaleString()}`}></div>
-                                                )}
-                                            </div>
-
-                                            <div className="mt-1 text-[10px] text-slate-400 flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity absolute top-full left-0 bg-white p-2 shadow-xl z-10 w-40 border rounded pointer-events-none">
-                                                 {client.sources['Warehouse'] > 0 && <span className="flex justify-between"><span>📦 倉庫</span> <span>{client.sources['Warehouse'].toLocaleString()}</span></span>}
-                                                 {client.sources['China'] > 0 && <span className="flex justify-between text-red-400 font-bold"><span>🇨🇳 中國</span> <span>{client.sources['China'].toLocaleString()}</span></span>}
-                                                 {client.sources['Other'] > 0 && <span className="flex justify-between text-yellow-600"><span>🔸 其他</span> <span>{client.sources['Other'].toLocaleString()}</span></span>}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                        </div>
+                        <div className="flex-1 w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                            {data.clients.map((client, idx) => (
+                                <div key={idx} className="bg-slate-50 p-2 rounded border border-slate-100"><span className="text-xs font-black truncate">{idx + 1}. {client.client}</span><span className="text-sm font-mono text-emerald-600 font-bold block">{client.amount.toLocaleString()}</span></div>
+                            ))}
                         </div>
                     </div>
                 ))}
-                
-                <div className="mt-12 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                    <h3 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
-                        <Edit3 className="w-5 h-5 text-blue-500" /> 手動輸入紀錄明細 (Manual Entries)
-                    </h3>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left">
-                            <thead className="bg-slate-50 text-xs text-slate-500 font-bold border-b border-slate-100">
-                                <tr>
-                                    <th className="p-3">日期</th>
-                                    <th className="p-3">客戶</th>
-                                    <th className="p-3">櫃號</th>
-                                    <th className="p-3">來源</th>
-                                    <th className="p-3 text-right">金額 (THB)</th>
-                                    <th className="p-3">備註</th>
-                                    <th className="p-3 text-center">操作</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {manualRevenueData.sort((a,b) => new Date(b.date) - new Date(a.date)).map(item => (
-                                    <tr key={item.id} className="hover:bg-slate-50">
-                                        <td className="p-3 font-mono text-slate-600">{item.date}</td>
-                                        <td className="p-3 font-bold text-slate-800">{item.client}</td>
-                                        <td className="p-3 text-slate-600"><span className="bg-slate-100 px-2 py-0.5 rounded text-xs">{item.cabinetNo || '-'}</span></td>
-                                        <td className="p-3">
-                                            {item.source === 'China' ? (
-                                                <span className="flex items-center gap-1 text-red-500 font-bold text-xs"><MapPin className="w-3 h-3" /> China</span>
-                                            ) : item.source === 'Warehouse' ? (
-                                                <span className="flex items-center gap-1 text-blue-500 font-bold text-xs"><Package className="w-3 h-3" /> Warehouse</span>
-                                            ) : (
-                                                <span className="text-slate-400 text-xs">{item.source || 'China'}</span>
-                                            )}
-                                        </td>
-                                        <td className="p-3 text-right font-mono text-emerald-600 font-bold">{item.amount.toLocaleString()}</td>
-                                        <td className="p-3 text-slate-400 text-xs">{item.note}</td>
-                                        <td className="p-3 text-center">
-                                            <button onClick={() => deleteManualRevenue(item.id)} className="text-red-300 hover:text-red-600 p-1 rounded hover:bg-red-50 transition-colors">
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                                {manualRevenueData.length === 0 && (
-                                    <tr><td colSpan="7" className="p-8 text-center text-slate-400">目前沒有手動輸入的紀錄</td></tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
             </div>
         )}
 
@@ -1499,62 +1020,64 @@ const App = () => {
                     <button onClick={() => setViewMode('dashboard')} className="font-bold flex items-center gap-2"><ArrowLeft/>返回</button>
                     <button onClick={() => window.print()} className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2"><Printer/>列印</button>
                 </div>
-                <div id="print-area">
-                    <InvoiceTemplate inv={(allGroupedInvoices[activeClient] || []).find(i => i.id === selectedInvoiceId)} />
-                </div>
+                <div id="print-area"><InvoiceTemplate inv={(allGroupedInvoices[activeClient] || []).find(i => i.id === selectedInvoiceId)} /></div>
             </div>
         )}
 
-        {viewMode === 'printAll' && <PrintAllView />}
-
-        {viewMode === 'masterTable' && <MasterTableView />}
+        {viewMode === 'printAll' && (
+            <div className="bg-slate-200 min-h-screen py-10 print:bg-white print:p-0 flex flex-col items-center">
+              <div className="w-[210mm] mb-6 flex justify-between items-center print:hidden px-4"><button onClick={() => setViewMode('dashboard')} className="text-slate-700 font-bold"><ArrowLeft className="w-5 h-5" /> 返回儀表板</button><button onClick={() => window.print()} className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2"><Printer className="w-5 h-5" /> 列印全部</button></div>
+              <div id="print-area">{displayedGroupedInvoices[activeClient]?.map(inv => <div key={inv.id} className="print-page-break"><InvoiceTemplate inv={inv} /></div>)}</div>
+            </div>
+        )}
 
         {viewMode === 'dataManagement' && (
-             <div className="p-8 max-w-4xl mx-auto min-h-screen bg-slate-50 animate-in fade-in">
-                <h2 className="text-3xl font-black text-slate-800 flex items-center gap-3 mb-8">
-                    <Archive className="w-8 h-8 text-emerald-600" /> 資料來源管理
-                </h2>
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                    <table className="w-full text-left">
+             <div className="p-8 max-w-5xl mx-auto min-h-screen bg-slate-50 space-y-8 animate-in fade-in">
+                
+                <div className="bg-white rounded-2xl shadow-sm border p-6">
+                    <h3 className="font-black mb-4 flex items-center gap-2 text-xl"><TableIcon className="text-blue-600"/> 基礎設定與初始化</h3>
+                    <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex justify-between items-center">
+                        <div>
+                            <h4 className="font-bold text-blue-900">匯入初始庫存表 (Inventory Baseline)</h4>
+                            <p className="text-xs text-blue-600 mt-1">上傳老闆的格式 CSV 檔，這將會覆蓋現有的安全水位與初始庫存計算基準。</p>
+                        </div>
+                        <label className={`bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg cursor-pointer font-bold text-sm shadow-sm transition-all ${isUploadingBase ? 'opacity-50 pointer-events-none' : ''}`}>
+                            {isUploadingBase ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4 inline mr-2" />}建檔匯入
+                            <input type="file" accept=".csv" className="hidden" onChange={handleInventoryBaseUpload} disabled={isUploadingBase} />
+                        </label>
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-2xl shadow-sm border p-6">
+                    <h3 className="font-black mb-4 flex items-center gap-2 text-xl"><Archive className="text-emerald-600"/> 歷史資料管理 (Data Source)</h3>
+                    <table className="w-full text-left border border-slate-200 rounded-lg overflow-hidden">
                         <thead className="bg-slate-100 text-xs font-bold text-slate-600 border-b border-slate-200">
-                            <tr>
-                                <th className="p-4">來源檔案名稱 (Source)</th>
-                                <th className="p-4 text-center">資料筆數</th>
-                                <th className="p-4 text-right">操作</th>
-                            </tr>
+                            <tr><th className="p-4">來源檔案名稱 (Source)</th><th className="p-4 text-center">資料筆數</th><th className="p-4 text-right">操作</th></tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                              {[...new Set(masterData.map(d => d.source))].map(source => (
-                                 <tr key={source} className="hover:bg-red-50 group transition-colors">
+                                 <tr key={source} className="hover:bg-red-50 transition-colors">
                                      <td className="p-4 font-mono text-sm font-bold text-slate-700">{source}</td>
-                                     <td className="p-4 text-center">
-                                         <span className="bg-slate-100 px-3 py-1 rounded-full text-xs font-black text-slate-600">{masterData.filter(d => d.source === source).length} 筆</span>
-                                     </td>
-                                     <td className="p-4 text-right">
-                                         <button onClick={() => deleteBatchBySource(source)} className="text-slate-400 hover:text-red-600 font-bold text-sm flex items-center gap-1 ml-auto transition-colors px-3 py-1 rounded hover:bg-red-100">
-                                             <Trash2 className="w-4 h-4" /> 刪除整批
-                                         </button>
-                                     </td>
+                                     <td className="p-4 text-center"><span className="bg-slate-100 px-3 py-1 rounded-full text-xs font-black">{masterData.filter(d => d.source === source).length} 筆</span></td>
+                                     <td className="p-4 text-right"><button onClick={() => deleteBatchBySource(source)} className="text-red-400 hover:text-red-700 font-bold text-sm flex items-center gap-1 ml-auto"><Trash2 className="w-4 h-4" /> 刪除整批</button></td>
                                  </tr>
                              ))}
                         </tbody>
                     </table>
                 </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border">
+                        <h3 className="font-black mb-4 flex items-center gap-2"><KeyRound className="text-purple-600"/> Gemini API Key</h3>
+                        <input type="password" value={userApiKey} onChange={e => { setUserApiKey(e.target.value); localStorage.setItem('everise_gemini_key', e.target.value); }} className="w-full border p-2 rounded bg-slate-50" placeholder="貼上 API Key"/>
+                    </div>
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border">
+                        <h3 className="font-black mb-4 flex items-center gap-2"><RefreshCw className="text-orange-500"/> 字典與設定重置</h3>
+                        <button onClick={resetConfigToDefaults} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 rounded-lg transition-colors mb-2">重置客戶櫃號至預設</button>
+                        <button onClick={() => {if(window.confirm("確定清空品名對應字典？下次匯入時可能需要重新手動對應品名。")) updateConfig('productMappings', {});}} className="w-full bg-orange-50 hover:bg-orange-100 text-orange-700 font-bold py-2 rounded-lg transition-colors">清空品名智能對應字典</button>
+                    </div>
+                </div>
              </div>
-        )}
-        
-        {viewMode === 'settings' && (
-            <div className="max-w-md mx-auto space-y-6 p-6">
-                <div className="bg-white p-6 rounded-2xl shadow-sm border">
-                    <h3 className="font-black mb-4 flex items-center gap-2"><KeyRound className="text-purple-600"/> Gemini API Key</h3>
-                    <input type="password" value={userApiKey} onChange={e => { setUserApiKey(e.target.value); localStorage.setItem('everise_gemini_key', e.target.value); }} className="w-full border p-2 rounded bg-slate-50" placeholder="貼上 API Key"/>
-                </div>
-                <div className="bg-white p-6 rounded-2xl shadow-sm border">
-                    <h3 className="font-black mb-4 flex items-center gap-2"><RefreshCw className="text-blue-600"/> 重置櫃號設定</h3>
-                    <p className="text-xs text-slate-500 mb-4">如果您發現櫃號起始值沒有更新（例如仍是舊的），請點擊下方按鈕強制重置為系統最新的預設值。</p>
-                    <button onClick={resetConfigToDefaults} className="w-full bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-2 rounded-lg transition-colors">重置為最新預設值</button>
-                </div>
-            </div>
         )}
       </main>
 
