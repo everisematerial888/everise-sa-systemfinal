@@ -127,9 +127,9 @@ const App = () => {
   const computedInventory = useMemo(() => {
       if (!inventoryMaster || inventoryMaster.length === 0) return [];
       return inventoryMaster.map(inv => {
-          const relatedOut = masterData.filter(d => d.origin === 'ER' && d.status !== '作廢' && d.product.trim().toUpperCase() === inv.product.trim().toUpperCase() && d.color.trim().toUpperCase() === inv.color.trim().toUpperCase());
+          const relatedOut = masterData.filter(d => d.origin === 'ER' && d.status !== '作廢' && (d.product || '').trim().toUpperCase() === (inv.product || '').trim().toUpperCase() && (d.color || '').trim().toUpperCase() === (inv.color || '').trim().toUpperCase());
           const totalShipped = relatedOut.reduce((sum, d) => sum + (d.shippedQty || 0), 0);
-          const relatedIn = restockData.filter(d => d.product.trim().toUpperCase() === inv.product.trim().toUpperCase() && d.color.trim().toUpperCase() === inv.color.trim().toUpperCase());
+          const relatedIn = restockData.filter(d => (d.product || '').trim().toUpperCase() === (inv.product || '').trim().toUpperCase() && (d.color || '').trim().toUpperCase() === (inv.color || '').trim().toUpperCase());
           const totalRestocked = relatedIn.reduce((sum, d) => sum + (d.amount || 0), 0);
           const currentStock = (inv.initialStock || 0) + totalRestocked - totalShipped;
           let stockStatus = 'normal';
@@ -216,7 +216,7 @@ const App = () => {
             if (productMappings[dictKey]) {
                 row.product = productMappings[dictKey].product; row.color = productMappings[dictKey].color; return;
             }
-            const exactMatch = inventoryMaster.find(i => i.product.toUpperCase().trim() === row._rawProduct && i.color.toUpperCase().trim() === row._rawColor.toUpperCase());
+            const exactMatch = inventoryMaster.find(i => (i.product || '').toUpperCase().trim() === row._rawProduct && (i.color || '').toUpperCase().trim() === row._rawColor.toUpperCase());
             if (exactMatch) { row.product = exactMatch.product; row.color = exactMatch.color; } 
             else if (!unmapped.find(u => u.rawKey === dictKey)) unmapped.push({ rawKey: dictKey, rawProduct: row._rawProduct, rawColor: row._rawColor });
         });
@@ -280,7 +280,7 @@ const App = () => {
           const idx = {
               product: getIdx(['品名', 'Product']), color: getIdx(['顏色', 'Color']),
               shipped2025: getIdx(['2025年出貨', '2025年的出貨', '2025']), shipped2026: getIdx(['2026年出貨', '2026出貨', '2026年的出貨']),
-              stock2026: getIdx(['2026年庫存', '2026庫存', '2026年的庫存']), restockTarget: getIdx(['安全水位', '補貨參考']), suggestedRestock: getIdx(['建議補貨量', '補貨量'])
+              stock2026: getIdx(['2026年庫存', '2026庫存', '2026年的庫存']), restockTarget: getIdx(['安全水位', '補貨參考', '低於此數字']), suggestedRestock: getIdx(['建議補貨量', '補貨量'])
           };
           if (idx.product === -1 || idx.stock2026 === -1) throw new Error("標題缺少：品名、2026年庫存");
 
@@ -307,13 +307,13 @@ const App = () => {
   };
 
   const sortedClients = useMemo(() => [...new Set(masterData.map(d => d.client))].sort(), [masterData]);
-  const availableMonths = useMemo(() => [...new Set(masterData.map(d => d.date?.substring(0, 7)))].filter(Boolean).sort().reverse(), [masterData]);
+  const availableMonths = useMemo(() => [...new Set(masterData.map(d => (d.date||'').substring(0, 7)))].filter(Boolean).sort().reverse(), [masterData]);
 
   const allGroupedInvoices = useMemo(() => {
     const res = {};
     sortedClients.forEach(c => {
         const rows = masterData.filter(d => d.client === c && d.shippedQty > 0);
-        const dates = [...new Set(rows.map(r => r.date))].sort((a, b) => new Date(a) - new Date(b));
+        const dates = [...new Set(rows.map(r => r.date))].sort((a, b) => new Date(a||0) - new Date(b||0));
         res[c] = dates.map((date, idx) => {
             const items = rows.filter(r => r.date === date);
             const conf = clientConfig[c] || { startNo: 1, prefix: c };
@@ -329,11 +329,20 @@ const App = () => {
       const res = {};
       Object.keys(allGroupedInvoices).forEach(client => {
           if (activeMasterClient !== 'ALL' && client !== activeMasterClient) return;
-          let invs = allGroupedInvoices[client].filter(inv => (filterMonth === 'ALL' || inv.date.startsWith(filterMonth)) && (filterOrigin === 'ALL' || inv.origin === filterOrigin));
+          let invs = allGroupedInvoices[client].filter(inv => (filterMonth === 'ALL' || (inv.date||'').startsWith(filterMonth)) && (filterOrigin === 'ALL' || inv.origin === filterOrigin));
           if (invs.length > 0) res[client] = invs;
       });
       return res;
   }, [allGroupedInvoices, filterMonth, filterOrigin, activeMasterClient]);
+
+  const filteredMasterData = useMemo(() => {
+    let d = masterData;
+    if (activeMasterClient !== 'ALL') d = d.filter(x => x.client === activeMasterClient);
+    if (filterMonth !== 'ALL') d = d.filter(x => (x.date||'').startsWith(filterMonth));
+    if (filterOrigin !== 'ALL') d = d.filter(x => x.origin === filterOrigin);
+    if (searchTerm) d = d.filter(x => (x.product||'').toLowerCase().includes(searchTerm.toLowerCase()) || (x.orderNo||'').toLowerCase().includes(searchTerm.toLowerCase()) || (x.client||'').toLowerCase().includes(searchTerm.toLowerCase()));
+    return d.sort((a,b) => new Date(b.date||0) - new Date(a.date||0)); 
+  }, [masterData, activeMasterClient, filterMonth, filterOrigin, searchTerm]);
 
   const downloadBatchPdfs = async () => {
       const invoicesToDownload = Object.values(displayedGroupedInvoices).flat();
@@ -375,7 +384,7 @@ const App = () => {
                                       if(target) setLocalMappings(p => ({ ...p, [item.rawKey]: { product: target.product, color: target.color } }));
                                   }}>
                                       <option value="">-- 請選擇標準品項 --</option>
-                                      {inventoryMaster.sort((a,b)=>a.product.localeCompare(b.product)).map(inv => <option key={inv.id} value={inv.id}>{inv.product} - {inv.color}</option>)}
+                                      {inventoryMaster.sort((a,b)=>(a.product||'').localeCompare(b.product||'')).map(inv => <option key={inv.id} value={inv.id}>{inv.product} - {inv.color}</option>)}
                                   </select>
                               </div>
                           </div>
@@ -463,11 +472,11 @@ const App = () => {
           if (selectedItems.length === 0) return alert("請勾選品項！");
           const csvRows = ["品名,顏色,匯出月份,期初(或累積)庫存,期間入庫量,期間出庫量,期末結算庫存"];
           inventoryMaster.filter(inv => selectedItems.includes(inv.id)).forEach(inv => {
-              const isTargetMonth = (dateStr) => exportMonth === 'ALL' || dateStr?.startsWith(exportMonth);
+              const isTargetMonth = (dateStr) => exportMonth === 'ALL' || (dateStr||'').startsWith(exportMonth);
               const mOut = masterData.filter(d => d.origin === 'ER' && d.status !== '作廢' && d.product === inv.product && d.color === inv.color);
               const mIn = restockData.filter(d => d.product === inv.product && d.color === inv.color);
-              const outBefore = mOut.filter(d => exportMonth !== 'ALL' && d.date < exportMonth + '-01').reduce((s, d)=>s+d.shippedQty, 0);
-              const inBefore = mIn.filter(d => exportMonth !== 'ALL' && d.date < exportMonth + '-01').reduce((s, d)=>s+d.amount, 0);
+              const outBefore = mOut.filter(d => exportMonth !== 'ALL' && (d.date||'') < exportMonth + '-01').reduce((s, d)=>s+d.shippedQty, 0);
+              const inBefore = mIn.filter(d => exportMonth !== 'ALL' && (d.date||'') < exportMonth + '-01').reduce((s, d)=>s+d.amount, 0);
               const stockBeforeMonth = (inv.initialStock || 0) + inBefore - outBefore;
               const outDuring = mOut.filter(d => isTargetMonth(d.date)).reduce((s, d)=>s+d.shippedQty, 0);
               const inDuring = mIn.filter(d => isTargetMonth(d.date)).reduce((s, d)=>s+d.amount, 0);
@@ -502,7 +511,7 @@ const App = () => {
   };
 
   const InventoryOverviewView = () => {
-      const filteredInv = computedInventory.filter(inv => (filterProduct === 'ALL' || inv.product === filterProduct) && (inv.product.toLowerCase().includes(searchTerm.toLowerCase()) || inv.color.toLowerCase().includes(searchTerm.toLowerCase())));
+      const filteredInv = computedInventory.filter(inv => (filterProduct === 'ALL' || inv.product === filterProduct) && ((inv.product||'').toLowerCase().includes(searchTerm.toLowerCase()) || (inv.color||'').toLowerCase().includes(searchTerm.toLowerCase())));
       const uniqueProducts = [...new Set(inventoryMaster.map(i => i.product))].sort();
       return (
           <div className="w-full p-6 animate-in fade-in min-h-screen bg-slate-50">
@@ -519,7 +528,16 @@ const App = () => {
               <div className="bg-white rounded-xl shadow-md border overflow-hidden" id="print-area">
                   <table className="w-full text-left text-sm border-collapse">
                       <thead className="bg-slate-800 text-white sticky top-0 text-xs font-bold">
-                          <tr><th className="p-4">品名</th><th className="p-4">顏色</th><th className="p-4 text-center">2025 出貨量</th><th className="p-4 text-center">總入庫量</th><th className="p-4 text-center">今年出庫量</th><th className="p-4 text-center text-emerald-300">當前實際庫存</th><th className="p-4 text-center">安全水位</th><th className="p-4 text-center">建議補貨量</th><th className="p-4 text-center">狀態</th></tr>
+                          <tr>
+                              <th className="p-4">品名</th><th className="p-4">顏色</th>
+                              <th className="p-4 text-center text-slate-400">期初基準<br/><span className="font-normal text-[10px]">(表單庫存+出貨)</span></th>
+                              <th className="p-4 text-center text-red-400">系統已扣<br/><span className="font-normal text-[10px]">(- 出貨量)</span></th>
+                              <th className="p-4 text-center text-blue-400">系統已加<br/><span className="font-normal text-[10px]">(+ 進貨/微調)</span></th>
+                              <th className="p-4 text-center text-emerald-300">當前實際庫存<br/><span className="font-normal text-[10px]">(系統自動結算)</span></th>
+                              <th className="p-4 text-center text-yellow-300">安全水位</th>
+                              <th className="p-4 text-center text-indigo-300">建議補貨量</th>
+                              <th className="p-4 text-center">狀態</th>
+                          </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 font-medium">
                           {filteredInv.map((inv, i) => {
@@ -527,8 +545,10 @@ const App = () => {
                               if (inv.stockStatus === 'negative') { rowBg = 'bg-red-50/80'; numColor = 'text-red-600'; } else if (inv.stockStatus === 'low') { rowBg = 'bg-yellow-50/80'; numColor = 'text-yellow-600'; }
                               return (
                                   <tr key={inv.id} className={`hover:bg-slate-50 ${rowBg}`}>
-                                      <td className="p-4 font-black">{inv.product}</td><td className="p-4 text-slate-600">{inv.color}</td><td className="p-4 text-center font-mono text-slate-400">{inv.shipped2025.toLocaleString()}</td>
-                                      <td className="p-4 text-center font-mono text-indigo-600">{inv.totalRestocked.toLocaleString()}</td><td className="p-4 text-center font-mono font-bold text-blue-600">{inv.totalShipped.toLocaleString()}</td>
+                                      <td className="p-4 font-black">{inv.product}</td><td className="p-4 text-slate-600">{inv.color}</td>
+                                      <td className="p-4 text-center font-mono text-slate-500">{inv.initialStock.toLocaleString()}</td>
+                                      <td className="p-4 text-center font-mono font-bold text-red-500">-{inv.totalShipped.toLocaleString()}</td>
+                                      <td className="p-4 text-center font-mono font-bold text-blue-500">+{inv.totalRestocked.toLocaleString()}</td>
                                       <td className={`p-4 text-center font-mono font-black text-xl ${numColor}`}>{inv.currentStock.toLocaleString()}</td>
                                       <td className="p-4 text-center font-mono text-slate-500">{inv.restockTarget||'-'}</td><td className="p-4 text-center font-mono font-black text-indigo-600">{inv.suggestedRestock||'-'}</td>
                                       <td className="p-4 text-center">
@@ -547,7 +567,7 @@ const App = () => {
   const InventoryLogView = () => {
       const [logFilterProduct, setLogFilterProduct] = useState('ALL');
       const uniqueProducts = [...new Set(masterData.map(i => i.product))].sort();
-      const logData = masterData.filter(d => d.origin === 'ER' && d.status !== '作廢' && (logFilterProduct === 'ALL' || d.product === logFilterProduct) && (d.client.toLowerCase().includes(searchTerm.toLowerCase()) || d.cabinetNo.toLowerCase().includes(searchTerm.toLowerCase()))).sort((a,b)=>new Date(b.date)-new Date(a.date));
+      const logData = masterData.filter(d => d.origin === 'ER' && d.status !== '作廢' && (logFilterProduct === 'ALL' || d.product === logFilterProduct) && ((d.client||'').toLowerCase().includes(searchTerm.toLowerCase()) || (d.cabinetNo||'').toLowerCase().includes(searchTerm.toLowerCase()))).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
       return (
           <div className="w-full p-6 animate-in fade-in min-h-screen bg-white">
               <div className="mb-6 flex justify-between items-center print:hidden">
@@ -614,7 +634,6 @@ const App = () => {
   };
 
   const MasterTableView = () => {
-    const editData = filteredMasterData.filter(d => d.product.toLowerCase().includes(searchTerm.toLowerCase()) || d.client.toLowerCase().includes(searchTerm.toLowerCase()));
     return (
     <div className="w-full p-6 min-h-screen bg-slate-50">
       <div className="mb-6 flex justify-between bg-white p-4 rounded-xl shadow-sm"><h2 className="text-xl font-black flex items-center gap-2"><Edit3 className="text-blue-600" /> 年度明細與作廢管理</h2><input type="text" placeholder="搜尋..." className="px-4 py-2 border rounded-lg text-sm w-64" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>
@@ -623,10 +642,10 @@ const App = () => {
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-100 sticky top-0 text-xs font-bold text-slate-600"><tr><th className="p-3">日期</th><th className="p-3">客戶</th><th className="p-3">櫃號</th><th className="p-3">產地</th><th className="p-3">品名</th><th className="p-3">顏色</th><th className="p-3 text-right">出貨量</th><th className="p-3 text-center">狀態</th><th className="p-3 text-center">操作</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
-              {editData.map(d => (
+              {filteredMasterData.map(d => (
                 <tr key={d.id} className={`hover:bg-blue-50 ${d.status === '作廢' ? 'opacity-50' : ''} ${editingId === d.id ? 'bg-yellow-50' : ''}`}>
                   {editingId === d.id ? (
-                    <><td className="p-2"><input className="border w-full" defaultValue={d.date} onChange={e => handleEditChange('date', e.target.value)} /></td><td className="p-2 font-bold">{d.client}</td><td className="p-2"><input className="border w-full font-bold" defaultValue={d.cabinetNo} onChange={e => handleEditChange('cabinetNo', e.target.value)} /></td><td className="p-2 font-bold">{d.origin}</td><td className="p-2"><input className="border w-full font-bold" defaultValue={d.product} onChange={e => handleEditChange('product', e.target.value)} /></td><td className="p-2"><input className="border w-full" defaultValue={d.color} onChange={e => handleEditChange('color', e.target.value)} /></td><td className="p-2"><input className="border w-full text-right" defaultValue={d.shippedDisplay || d.shippedQty} onChange={e => handleEditChange('shippedDisplay', e.target.value)} /></td><td className="p-2 text-center">{d.status}</td><td className="p-2 text-center"><button onClick={saveEdit} className="p-1 bg-green-500 text-white rounded"><CheckCircle2 className="w-4 h-4" /></button><button onClick={()=>setEditingId(null)} className="p-1 bg-slate-300 text-white rounded"><X className="w-4 h-4" /></button></td></>
+                    <><td className="p-2"><input className="border w-full" defaultValue={d.date} onChange={e => handleEditChange('date', e.target.value)} /></td><td className="p-2 font-bold">{d.client}</td><td className="p-2"><input className="border w-full font-bold" defaultValue={d.cabinetNo} onChange={e => handleEditChange('cabinetNo', e.target.value)} /></td><td className="p-2 font-bold">{d.origin}</td><td className="p-2"><input className="border w-full font-bold" autoFocus defaultValue={d.product} onChange={e => handleEditChange('product', e.target.value)} /></td><td className="p-2"><input className="border w-full" defaultValue={d.color} onChange={e => handleEditChange('color', e.target.value)} /></td><td className="p-2"><input className="border w-full text-right" defaultValue={d.shippedDisplay || d.shippedQty} onChange={e => handleEditChange('shippedDisplay', e.target.value)} /></td><td className="p-2 text-center">{d.status}</td><td className="p-2 text-center"><button onClick={saveEdit} className="p-1 bg-green-500 text-white rounded"><CheckCircle2 className="w-4 h-4" /></button><button onClick={()=>setEditingId(null)} className="p-1 bg-slate-300 text-white rounded"><X className="w-4 h-4" /></button></td></>
                   ) : (
                     <><td className="p-3 text-slate-500">{d.date}</td><td className="p-3 font-bold text-slate-700">{d.client}</td><td className="p-3 font-bold text-blue-600">{d.cabinetNo || '-'}</td><td className="p-3 text-xs font-bold">{d.origin === 'China' ? <span className="text-red-500">CN</span> : <span className="text-blue-500">ER</span>}</td><td className={`p-3 font-bold ${d.status === '作廢' ? 'line-through text-slate-400' : 'text-slate-800'}`}>{d.product}</td><td className="p-3 text-slate-600">{d.color}</td><td className="p-3 text-right font-mono font-bold text-blue-600">{d.shippedQty}</td><td className="p-3 text-center">{d.status === '作廢' && <span className="bg-red-100 text-red-600 px-2 rounded text-xs font-bold">已作廢</span>}</td><td className="p-3 text-center">{d.status !== '作廢' ? <><button onClick={()=>startEditing(d)} className="text-slate-300 hover:text-blue-500 mr-2"><Edit3 className="w-4 h-4 inline"/></button><button onClick={()=>handleVoidOrder(d.id)} className="text-red-400 font-bold text-xs bg-red-50 px-2 rounded border border-red-100 hover:bg-red-100">作廢回補</button></> : <button onClick={()=>handleDelete(d.id)} className="text-slate-300 hover:text-red-500"><Trash className="w-4 h-4 inline"/></button>}</td></>
                   )}
@@ -669,7 +688,7 @@ const App = () => {
         <div className="flex items-center gap-6">
           <h1 className="text-xl font-black text-white flex items-center gap-2"><Database className="w-6 h-6 text-emerald-400" /> EVERISE</h1>
           <div className="flex bg-slate-800 p-1 rounded-lg overflow-x-auto">
-            {[ { id: 'dashboard', label: 'SA 請款單' }, { id: 'inventoryOverview', label: '庫存總覽' }, { id: 'inventoryLog', label: '庫存流水' }, { id: 'masterTable', label: '明細與作廢' }, { id: 'dataManagement', label: '進階管理' } ].map(t => (
+            {[ { id: 'dashboard', label: 'SA 請款單' }, { id: 'inventoryOverview', label: '庫存總覽' }, { id: 'inventoryLog', label: '庫存流水' }, { id: 'masterTable', label: '明細與作廢' }, { id: 'revenueStats', label: '營業額' }, { id: 'dataManagement', label: '進階管理' } ].map(t => (
               <button key={t.id} onClick={() => setViewMode(t.id)} className={`px-4 py-2 rounded-md text-xs font-bold whitespace-nowrap ${viewMode === t.id ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'}`}>{t.label}</button>
             ))}
           </div>
@@ -702,6 +721,29 @@ const App = () => {
         {viewMode === 'monthlyExport' && <MonthlyExportView />}
         {viewMode === 'masterTable' && <MasterTableView />}
 
+        {viewMode === 'revenueStats' && (
+            <div className="w-full px-6 py-8 mx-auto space-y-6">
+                <div className="flex justify-between items-center"><h2 className="text-3xl font-black">年度營業額統計</h2><button onClick={() => setShowRevenueModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"><Plus className="w-4 h-4"/>新增營收</button></div>
+                {revenueData.map((data) => (
+                    <div key={data.monthKey} className="bg-white rounded-xl shadow-sm border p-6 flex flex-col md:flex-row gap-6 items-start">
+                        <div className="w-full md:w-48 shrink-0 border-b md:border-b-0 md:border-r border-slate-100 pr-4">
+                            <div className="text-sm font-bold text-slate-400 uppercase">{data.year}</div><div className="text-4xl font-black text-slate-800">{data.month} <span className="text-lg text-slate-400">月</span></div>
+                            <div className="mt-2 text-xl font-black text-emerald-600 flex items-center gap-1"><span className="text-xs text-emerald-400">THB</span>{data.total.toLocaleString()}</div>
+                            <div className="mt-4 space-y-2 border-t border-slate-100 pt-2 text-sm">
+                                <div className="flex justify-between"><span className="text-slate-400 font-bold flex items-center gap-1"><Package className="w-3 h-3" /> 倉庫</span><span className="font-mono font-bold text-blue-600">{data.warehouseTotal.toLocaleString()}</span></div>
+                                <div className="flex justify-between"><span className="text-slate-400 font-bold flex items-center gap-1"><MapPin className="w-3 h-3" /> 中國</span><span className="font-mono font-bold text-red-500">{data.chinaTotal.toLocaleString()}</span></div>
+                            </div>
+                        </div>
+                        <div className="flex-1 w-full grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                            {data.clients.map((client, idx) => (
+                                <div key={idx} className="bg-slate-50 p-2 rounded border border-slate-100"><span className="text-xs font-black truncate">{idx + 1}. {client.client}</span><span className="text-sm font-mono text-emerald-600 font-bold block">{client.amount.toLocaleString()}</span></div>
+                            ))}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        )}
+
         {viewMode === 'preview' && (
             <div className="w-full py-10 bg-slate-200 min-h-screen"><div className="max-w-[210mm] mx-auto mb-6 flex justify-between print:hidden"><button onClick={() => setViewMode('dashboard')} className="font-bold flex items-center gap-2"><ArrowLeft/>返回</button><button onClick={() => window.print()} className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-bold">列印</button></div><div id="print-area"><InvoiceTemplate inv={(allGroupedInvoices[activeClient] || []).find(i => i.id === selectedInvoiceId)} /></div></div>
         )}
@@ -711,7 +753,7 @@ const App = () => {
         )}
 
         {viewMode === 'dataManagement' && (
-             <div className="w-full px-6 py-8 mx-auto min-h-screen bg-slate-50 space-y-8">
+             <div className="w-full px-6 py-8 min-h-screen bg-slate-50 space-y-8">
                 <div className="bg-white rounded-2xl shadow-sm border p-6">
                     <h3 className="font-black mb-4 flex items-center gap-2 text-xl"><TableIcon className="text-blue-600"/> 基礎設定與初始化</h3>
                     <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex justify-between items-center">
@@ -722,7 +764,7 @@ const App = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="bg-white p-6 rounded-2xl shadow-sm border"><h3 className="font-black mb-4 flex items-center gap-2"><KeyRound className="text-purple-600"/> 字典與設定重置</h3><button onClick={resetConfigToDefaults} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 rounded-lg mb-2">重置客戶櫃號至預設</button><button onClick={() => {if(window.confirm("確定清空品名對應字典？")) updateConfig('productMappings', {});}} className="w-full bg-orange-50 hover:bg-orange-100 text-orange-700 font-bold py-2 rounded-lg">清空品名智能對應字典</button></div>
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border"><h3 className="font-black mb-4 flex items-center gap-2"><Archive className="text-emerald-600"/> 歷史資料管理</h3><div className="h-40 overflow-auto border rounded-lg"><table className="w-full text-left text-sm"><thead className="bg-slate-100 sticky top-0"><tr><th className="p-2">來源檔名</th><th className="p-2 text-right">操作</th></tr></thead><tbody className="divide-y">{[...new Set(masterData.map(d => d.source))].map(source => <tr key={source}><td className="p-2 font-mono text-xs">{source} ({masterData.filter(d=>d.source===source).length} 筆)</td><td className="p-2 text-right"><button onClick={() => deleteBatchBySource(source)} className="text-red-500 font-bold text-xs"><Trash2 className="w-3 h-3 inline"/> 刪除</button></td></tr>)}</tbody></table></div></div>
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border"><h3 className="font-black mb-4 flex items-center gap-2"><Archive className="text-emerald-600"/> 歷史資料管理</h3><div className="h-40 overflow-auto border rounded-lg"><table className="w-full text-left text-sm"><thead className="bg-slate-100 sticky top-0"><tr><th className="p-2">來源檔名</th><th className="p-2 text-right">操作</th></tr></thead><tbody className="divide-y">{[...new Set(masterData.map(d => d.source || 'Unknown'))].map(source => <tr key={source}><td className="p-2 font-mono text-xs">{source} ({masterData.filter(d=>(d.source||'Unknown')===source).length} 筆)</td><td className="p-2 text-right"><button onClick={() => deleteBatchBySource(source)} className="text-red-500 font-bold text-xs"><Trash2 className="w-3 h-3 inline"/> 刪除</button></td></tr>)}</tbody></table></div></div>
                 </div>
              </div>
         )}
