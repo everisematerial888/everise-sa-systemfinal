@@ -147,7 +147,7 @@ const AiModal = ({ show, onClose, prompt, setPrompt, onSend, response, loading, 
           <input 
             type="text" 
             className="flex-1 border rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:outline-none disabled:bg-slate-100"
-            placeholder="例如：統計本月南泰廠商的出貨總量？"
+            placeholder="例如：統計本月出貨總量最高的三個客戶？"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !loading && hasKey && onSend()}
@@ -281,19 +281,9 @@ const App = () => {
   const [showRevenueModal, setShowRevenueModal] = useState(false); 
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   
-  // 新增上傳狀態，避免畫面假死
   const [isUploading, setIsUploading] = useState(false);
 
   const [clientConfig, setClientConfig] = useState(DEFAULT_CLIENT_CONFIG);
-
-  const [vendorRules] = useState([
-    { id: 1, keyword: "SANDWICH", vendor: "南泰" },
-    { id: 2, keyword: "SPONGE", vendor: "南泰" },
-    { id: 3, keyword: "600D", vendor: "龍利達" },
-    { id: 4, keyword: "LACOSTE", vendor: "南泰" },
-    { id: 5, keyword: "VACUMN", vendor: "龍利達" },
-    { id: 6, keyword: "CC", vendor: "南泰" }
-  ]);
 
   // --- Auth & Data Sync ---
   useEffect(() => {
@@ -482,8 +472,6 @@ const App = () => {
                 if (cols.length < 3) return null;
 
                 const productName = cols[idx.product]?.replace(/"/g, '') || '';
-                const matched = vendorRules.find(rule => productName.toUpperCase().includes(rule.keyword));
-                
                 const parsedQty = parseQuantity(cols[idx.shipped], productName);
                 
                 return saveMasterDataRow({
@@ -494,9 +482,7 @@ const App = () => {
                     color: (cols[idx.color] || '').replace(/"/g, ''),
                     shippedQty: parsedQty.value,
                     shippedDisplay: parsedQty.display,
-                    // 單價完整保留小數點，不使用 Math.round
                     price: parseFloat(cols[idx.price]?.replace(/[^\d.-]/g, '')) || 0,
-                    vendor: matched ? matched.vendor : "待查",
                     cabinetNo: cols[idx.cabinet] ? cols[idx.cabinet].replace(/"/g, '') : '',
                     orderNo: cols[idx.order] || 'N/A',
                     status: cols[idx.status] || '',
@@ -538,7 +524,6 @@ const App = () => {
             const paddedNo = String(conf.startNo + idx).padStart(3, '0');
             const origin = items[0]?.origin || 'ER'; 
             
-            // 【邏輯修正】使用精確的 i.price 乘上數量後，針對結果四捨五入
             const total = items.reduce((s, i) => s + Math.round(i.shippedQty * i.price), 0);
             
             return { 
@@ -580,11 +565,11 @@ const App = () => {
 
   // --- Export Logic ---
   const exportTrackingCSV = () => {
-    const headers = ["下單日期", "訂單", "廠商", "產地", "品名", "顏色", "訂單數量", "實際出貨", "未出貨", "櫃號", "結案", "備註"];
+    const headers = ["下單日期", "訂單", "產地", "品名", "顏色", "訂單數量", "實際出貨", "未出貨", "櫃號", "結案", "備註"];
     const csvRows = [headers.join(",")];
     filteredMasterData.forEach(d => {
       const dynamicCabinet = d.cabinetNo || allGroupedInvoices[d.client]?.find(inv => inv.date === d.date)?.cabinetNo || "";
-      const row = [d.date, d.orderNo, d.vendor, d.origin, `"${d.product}"`, d.color, d.orderQty || 0, `"${d.shippedDisplay || d.shippedQty}"`, (d.orderQty || 0) - d.shippedQty, dynamicCabinet, d.status, `"${d.note}"`];
+      const row = [d.date, d.orderNo, d.origin, `"${d.product}"`, d.color, d.orderQty || 0, `"${d.shippedDisplay || d.shippedQty}"`, (d.orderQty || 0) - d.shippedQty, dynamicCabinet, d.status, `"${d.note}"`];
       csvRows.push(row.join(","));
     });
     const blob = new Blob(["\uFEFF" + csvRows.join("\n")], { type: 'text/csv;charset=utf-8;' });
@@ -665,7 +650,6 @@ const App = () => {
 
     masterData.forEach(d => {
         const origin = d.origin || 'Warehouse'; 
-        // 【邏輯修正】使用精確的 d.price 乘上數量後，針對結果四捨五入
         const roundedAmount = Math.round(d.shippedQty * d.price);
         process(d.date, d.client, roundedAmount, origin);
     });
@@ -789,7 +773,6 @@ const App = () => {
             <tr>
               <th className="p-2 border-b border-r border-slate-300 w-24">下單日期</th>
               <th className="p-2 border-b border-r border-slate-300 w-24">訂單</th>
-              <th className="p-2 border-b border-r border-slate-300 w-20">廠商</th>
               <th className="p-2 border-b border-r border-slate-300 w-20">產地</th>
               <th className="p-2 border-b border-r border-slate-300">品名規格</th>
               <th className="p-2 border-b border-r border-slate-300 w-32">顏色</th>
@@ -805,7 +788,6 @@ const App = () => {
               <tr key={d.id} className={`hover:bg-blue-50 ${i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>
                 <td className="p-2 border-r border-slate-200">{d.date}</td>
                 <td className="p-2 border-r border-slate-200 font-bold">{d.orderNo}</td>
-                <td className="p-2 border-r border-slate-200 text-xs">{d.vendor}</td>
                 <td className="p-2 border-r border-slate-200 text-xs font-bold text-center">
                     {d.origin === 'China' ? <span className="text-red-500">CN</span> : <span className="text-blue-500">ER</span>}
                 </td>
@@ -821,7 +803,7 @@ const App = () => {
               </tr>
             ))}
             {filteredMasterData.length === 0 && (
-                <tr><td colSpan="11" className="p-8 text-center text-slate-400">目前沒有符合篩選的資料</td></tr>
+                <tr><td colSpan="10" className="p-8 text-center text-slate-400">目前沒有符合篩選的資料</td></tr>
             )}
           </tbody>
         </table>
@@ -851,7 +833,6 @@ const App = () => {
                 <th className="p-3 w-24">顏色</th>
                 <th className="p-3 w-32 text-right">出貨量 (支援算式)</th>
                 <th className="p-3 w-20 text-right">單價</th>
-                <th className="p-3 w-24">廠商</th>
                 <th className="p-3 w-24 text-center">操作</th>
               </tr>
             </thead>
@@ -873,7 +854,6 @@ const App = () => {
                       <td className="p-2"><input className="border rounded p-1 w-full" defaultValue={d.color} onChange={e => handleEditChange('color', e.target.value)} /></td>
                       <td className="p-2"><input className="border rounded p-1 w-full text-right" type="text" defaultValue={d.shippedDisplay || d.shippedQty} onChange={e => handleEditChange('shippedDisplay', e.target.value)} /></td>
                       <td className="p-2"><input className="border rounded p-1 w-full text-right" type="number" defaultValue={d.price} onChange={e => handleEditChange('price', parseFloat(e.target.value))} /></td>
-                      <td className="p-2"><input className="border rounded p-1 w-full" defaultValue={d.vendor} onChange={e => handleEditChange('vendor', e.target.value)} /></td>
                       <td className="p-2 text-center flex gap-1 justify-center">
                         <button onClick={saveEdit} className="p-1 bg-green-500 text-white rounded hover:bg-green-600"><CheckCircle2 className="w-4 h-4" /></button>
                         <button onClick={() => setEditingId(null)} className="p-1 bg-slate-300 text-white rounded hover:bg-slate-400"><X className="w-4 h-4" /></button>
@@ -891,7 +871,6 @@ const App = () => {
                       <td className="p-3 text-slate-600">{d.color}</td>
                       <td className="p-3 text-right font-mono font-bold text-blue-600">{d.shippedDisplay || d.shippedQty}</td>
                       <td className="p-3 text-right font-mono text-emerald-600">{d.price}</td>
-                      <td className="p-3 text-slate-400">{d.vendor}</td>
                       <td className="p-3 text-center flex gap-2 justify-center">
                         <button onClick={() => startEditing(d)} className="text-slate-300 hover:text-blue-500"><Edit3 className="w-4 h-4" /></button>
                         <button onClick={() => handleDelete(d.id)} className="text-slate-300 hover:text-red-500"><Trash className="w-4 h-4" /></button>
@@ -901,7 +880,7 @@ const App = () => {
                 </tr>
               ))}
               {filteredMasterData.length === 0 && (
-                  <tr><td colSpan="10" className="p-8 text-center text-slate-400">目前沒有符合篩選的資料</td></tr>
+                  <tr><td colSpan="9" className="p-8 text-center text-slate-400">目前沒有符合篩選的資料</td></tr>
               )}
             </tbody>
           </table>
@@ -1052,7 +1031,6 @@ const App = () => {
               <tr><td colSpan="3" className="pt-2 pb-1 font-bold text-lg">ORDER "{item.product}"</td></tr>
               <tr className="text-sm">
                 <td className="w-1/3 py-1 font-bold uppercase">{item.color}</td>
-                {/* 【邏輯修正】單價完整呈現，針對乘法結果四捨五入 */}
                 <td className="py-1 text-center font-mono">{item.shippedDisplay || item.shippedQty + ' Y'} x {item.price} = THB</td>
                 <td className="py-1 text-right font-bold text-base">{(Math.round(item.shippedQty * item.price)).toLocaleString()}</td>
               </tr>
