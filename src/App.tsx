@@ -19,7 +19,7 @@ import {
   getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, writeBatch
 } from 'firebase/firestore';
 
-// --- 動態載入 html2pdf 套件 ---
+// --- Dynamic Load html2pdf ---
 const loadHtml2Pdf = () => {
     return new Promise((resolve) => {
         if (window.html2pdf) return resolve(window.html2pdf);
@@ -30,7 +30,7 @@ const loadHtml2Pdf = () => {
     });
 };
 
-// --- 設定區：Firebase 設定 ---
+// --- Firebase Config ---
 const firebaseConfig = {
   apiKey: "AIzaSyDsGkGsWS4sRIn3o9XzWmqGSbZg4i5Dc9g",
   authDomain: "sa-test-96792.firebaseapp.com",
@@ -42,7 +42,7 @@ const firebaseConfig = {
 };
 const apiKeyDefault = "AIzaSyD6v4BGNqEzJwAUlSmijajj_jUU715wnXc"; 
 
-// --- 預設的客戶櫃號設定 ---
+// --- Default Client C/NO Config ---
 const DEFAULT_CLIENT_CONFIG = {
   "AP": { startNo: 955, prefix: "AP" },
   "APS": { startNo: 860, prefix: "APS" },
@@ -68,7 +68,7 @@ const DEFAULT_CLIENT_CONFIG = {
   "WP": { startNo: 274, prefix: "WP" }
 };
 
-// --- 智能數量解析大腦 ---
+// --- Smart Quantity Parsing Brain ---
 const parseQuantity = (rawQtyStr, productName) => {
   if (!rawQtyStr) return { display: '', value: 0 };
   const str = String(rawQtyStr).trim().toUpperCase();
@@ -118,7 +118,7 @@ const AiModal = ({ show, onClose, prompt, setPrompt, onSend, response, loading, 
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh]">
         <div className="p-4 border-b bg-slate-50 flex justify-between items-center">
           <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-purple-600" /> AI 訂單數據分析
+            <Sparkles className="w-5 h-5 text-purple-600" /> AI Data Analysis
           </h3>
           <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full"><X className="w-5 h-5 text-slate-500" /></button>
         </div>
@@ -127,8 +127,8 @@ const AiModal = ({ show, onClose, prompt, setPrompt, onSend, response, loading, 
             <div className="mb-4 p-4 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm flex gap-2 items-start">
               <KeyRound className="w-5 h-5 shrink-0" />
               <div>
-                <p className="font-bold">尚未設定 Gemini API Key</p>
-                <p>請前往「設定」頁面輸入您的 API Key 才能使用 AI 分析功能。</p>
+                <p className="font-bold">No Gemini API Key Set</p>
+                <p>Please go to 'Settings' to enter your API Key to use the AI Analysis feature.</p>
               </div>
             </div>
           )}
@@ -139,7 +139,7 @@ const AiModal = ({ show, onClose, prompt, setPrompt, onSend, response, loading, 
           ) : (
             <div className="text-center py-12 text-slate-400">
               <Sparkles className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>輸入問題，讓 AI 幫您分析當前的訂單數據...</p>
+              <p>Enter a question to let AI analyze current order data...</p>
             </div>
           )}
         </div>
@@ -147,7 +147,7 @@ const AiModal = ({ show, onClose, prompt, setPrompt, onSend, response, loading, 
           <input 
             type="text" 
             className="flex-1 border rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:outline-none disabled:bg-slate-100"
-            placeholder="例如：統計本月出貨總量最高的三個客戶？"
+            placeholder="e.g., Top 3 clients with highest shipped volume this month?"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !loading && hasKey && onSend()}
@@ -160,7 +160,7 @@ const AiModal = ({ show, onClose, prompt, setPrompt, onSend, response, loading, 
             className="bg-purple-600 text-white px-6 py-2 rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
-            {loading ? '分析中 / Analyzing...' : '送出 / Send'}
+            {loading ? 'Analyzing...' : 'Send'}
           </button>
         </div>
       </div>
@@ -181,7 +181,7 @@ const ManualRevenueModal = ({ show, onClose, onSave }) => {
 
     const handleSubmit = () => {
         if (!amount || !client || !date) {
-            alert("請填寫完整資訊 (日期、客戶、金額)");
+            alert("Please fill in all required fields (Date, Client, Amount)");
             return;
         }
         onSave({ 
@@ -203,47 +203,47 @@ const ManualRevenueModal = ({ show, onClose, onSave }) => {
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                        <Plus className="w-5 h-5 text-emerald-600" /> 新增額外營收
+                        <Plus className="w-5 h-5 text-emerald-600" /> Add Extra Revenue
                     </h3>
                     <button onClick={onClose}><X className="w-5 h-5 text-slate-400" /></button>
                 </div>
                 <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs font-bold text-slate-500 mb-1">出貨日期</label>
+                            <label className="block text-xs font-bold text-slate-500 mb-1">Ship Date</label>
                             <input type="date" className="w-full border rounded-lg px-3 py-2 font-mono" value={date} onChange={e => setDate(e.target.value)} />
                         </div>
                         <div>
-                             <label className="block text-xs font-bold text-slate-500 mb-1">出貨來源</label>
+                             <label className="block text-xs font-bold text-slate-500 mb-1">Origin</label>
                              <select className="w-full border rounded-lg px-3 py-2 bg-slate-50" value={source} onChange={e => setSource(e.target.value)}>
-                                 <option value="China">China (中國直送)</option>
-                                 <option value="Warehouse">Warehouse (倉庫)</option>
-                                 <option value="Other">Other (其他)</option>
+                                 <option value="China">China</option>
+                                 <option value="Warehouse">Warehouse</option>
+                                 <option value="Other">Other</option>
                              </select>
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs font-bold text-slate-500 mb-1">客戶名稱</label>
-                            <input type="text" className="w-full border rounded-lg px-3 py-2 font-bold uppercase" value={client} onChange={e => setClient(e.target.value)} placeholder="例如：APS" />
+                            <label className="block text-xs font-bold text-slate-500 mb-1">Client Name</label>
+                            <input type="text" className="w-full border rounded-lg px-3 py-2 font-bold uppercase" value={client} onChange={e => setClient(e.target.value)} placeholder="e.g., APS" />
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-slate-500 mb-1">客戶櫃號/單號</label>
-                            <input type="text" className="w-full border rounded-lg px-3 py-2" value={cabinetNo} onChange={e => setCabinetNo(e.target.value)} placeholder="例如：SRR#114" />
+                            <label className="block text-xs font-bold text-slate-500 mb-1">Client C/NO</label>
+                            <input type="text" className="w-full border rounded-lg px-3 py-2" value={cabinetNo} onChange={e => setCabinetNo(e.target.value)} placeholder="e.g., SRR#114" />
                         </div>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-slate-500 mb-1">出貨金額 (THB)</label>
+                        <label className="block text-xs font-bold text-slate-500 mb-1">Amount (THB)</label>
                         <input type="number" className="w-full border rounded-lg px-3 py-2 font-mono text-xl text-emerald-600 font-bold bg-emerald-50 border-emerald-200" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" />
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-slate-500 mb-1">備註 (來源說明)</label>
-                        <input type="text" className="w-full border rounded-lg px-3 py-2" value={note} onChange={e => setNote(e.target.value)} placeholder="例如：C4 SHINY" />
+                        <label className="block text-xs font-bold text-slate-500 mb-1">Note (Optional)</label>
+                        <input type="text" className="w-full border rounded-lg px-3 py-2" value={note} onChange={e => setNote(e.target.value)} placeholder="e.g., C4 SHINY" />
                     </div>
                 </div>
                 <div className="mt-8 flex gap-3">
-                    <button onClick={onClose} className="flex-1 py-3 rounded-lg font-bold text-slate-500 hover:bg-slate-100">關閉 / Close</button>
-                    <button onClick={handleSubmit} className="flex-[2] py-3 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200">儲存並新增下一筆 / Save & Add Next</button>
+                    <button onClick={onClose} className="flex-1 py-3 rounded-lg font-bold text-slate-500 hover:bg-slate-100">Close</button>
+                    <button onClick={handleSubmit} className="flex-[2] py-3 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200">Save & Add Next</button>
                 </div>
             </div>
         </div>
@@ -268,7 +268,7 @@ const App = () => {
   const [editingId, setEditingId] = useState(null);
   const editValues = useRef({}); 
 
-  // --- 全局獨立篩選狀態 ---
+  // --- Filter State ---
   const [filterMonth, setFilterMonth] = useState('ALL');
   const [filterOrigin, setFilterOrigin] = useState('ALL');
   const [activeMasterClient, setActiveMasterClient] = useState('ALL');
@@ -280,7 +280,6 @@ const App = () => {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [showRevenueModal, setShowRevenueModal] = useState(false); 
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
-  
   const [isUploading, setIsUploading] = useState(false);
 
   const [clientConfig, setClientConfig] = useState(DEFAULT_CLIENT_CONFIG);
@@ -333,7 +332,7 @@ const App = () => {
   };
 
   const deleteBatchBySource = async (sourceName) => {
-      if (!window.confirm(`警告：確定刪除來自 "${sourceName}" 的所有資料？ / Confirm deletion?`)) return;
+      if (!window.confirm(`Warning: Are you sure you want to delete all data from "${sourceName}"?`)) return;
       setSyncStatus('syncing');
       try {
           const targets = masterData.filter(d => d.source === sourceName);
@@ -345,7 +344,7 @@ const App = () => {
               await batch.commit();
           }
       } catch(e) {
-          alert('刪除失敗，請檢查權限設定！ / Delete failed: ' + e.message);
+          alert('Delete failed, please check permissions! Error: ' + e.message);
       }
       setSyncStatus('idle');
   };
@@ -355,24 +354,24 @@ const App = () => {
           await addDoc(collection(db, 'everise_system', 'shared', 'manual_revenue'), { ...data, timestamp: Date.now() });
           setShowRevenueModal(false);
       } catch(e) {
-          alert('寫入失敗，請檢查 Firebase 權限！ / Save failed: ' + e.message);
+          alert('Save failed, please check Firebase permissions! Error: ' + e.message);
       }
   };
 
   const deleteManualRevenue = async (id) => {
-      if(window.confirm("確定刪除此筆營收紀錄？ / Confirm deletion?")) {
+      if(window.confirm("Are you sure you want to delete this revenue record?")) {
           try {
               await deleteDoc(doc(db, 'everise_system', 'shared', 'manual_revenue', id));
-          } catch(e) { alert('刪除失敗 / Delete failed: ' + e.message); }
+          } catch(e) { alert('Delete failed: ' + e.message); }
       }
   };
 
   const resetConfigToDefaults = async () => {
-    if (window.confirm("確定要將所有客戶的櫃號起始值重置為系統預設值嗎？ / Confirm reset to defaults?")) {
+    if (window.confirm("Are you sure you want to reset all client starting C/NO to system defaults?")) {
       try {
           await setDoc(doc(db, 'everise_system', 'shared', 'settings', 'config'), { clientConfig: DEFAULT_CLIENT_CONFIG }, { merge: true });
-          alert("重置完成！ / Reset completed!");
-      } catch(e) { alert('重置失敗 / Reset failed: ' + e.message); }
+          alert("Reset completed!");
+      } catch(e) { alert('Reset failed: ' + e.message); }
     }
   };
 
@@ -401,15 +400,15 @@ const App = () => {
 
     try {
         updateMasterDataRow(editingId, updates);
-    } catch(e) { alert('儲存失敗 / Save failed: ' + e.message); }
+    } catch(e) { alert('Save failed: ' + e.message); }
     
     setEditingId(null);
     editValues.current = {};
   };
 
   const handleDelete = (id) => {
-      if(window.confirm("確定要永久刪除此筆資料嗎？ / Confirm permanent deletion?")) {
-          deleteMasterDataRow(id).catch(e => alert('刪除失敗 / Delete failed: '+e.message));
+      if(window.confirm("Are you sure you want to permanently delete this record?")) {
+          deleteMasterDataRow(id).catch(e => alert('Delete failed: '+e.message));
       }
   }
 
@@ -446,6 +445,7 @@ const App = () => {
             const isChina = file.name.toLowerCase().includes('china');
             const origin = isChina ? 'China' : 'ER';
 
+            // Keeps fallback for Chinese headers inside CSV files
             const getIdx = (keys) => headers.findIndex(h => keys.some(k => h.includes(k)));
             const idx = {
                 date: getIdx(['date', '日期']), client: getIdx(['client', '客戶']),
@@ -496,12 +496,12 @@ const App = () => {
             await Promise.all(promises.filter(p => p !== null));
         }
         
-        alert("✅ 上傳成功！ / Upload Successful!");
+        alert("Upload Successful!");
         setViewMode('dashboard');
         
     } catch (error) {
         console.error("Upload error:", error);
-        alert(`❌ 上傳失敗！\n\n原因可能是 Firebase 資料庫權限未開啟。\n請至 Firebase 後台修改 Security Rules 為 allow read, write: if true;\n\n錯誤代碼：${error.message}`);
+        alert(`Upload Failed!\n\nReason might be Firebase Security Rules.\nPlease set Rules to 'allow read, write: if true;'\n\nError: ${error.message}`);
     } finally {
         setIsUploading(false);
         e.target.value = ''; 
@@ -565,7 +565,7 @@ const App = () => {
 
   // --- Export Logic ---
   const exportTrackingCSV = () => {
-    const headers = ["下單日期", "訂單", "產地", "品名", "顏色", "訂單數量", "實際出貨", "未出貨", "櫃號", "結案", "備註"];
+    const headers = ["Date", "Order", "Origin", "Spec", "Color", "Order Qty", "Shipped", "Unshipped", "C/NO", "Status", "Note"];
     const csvRows = [headers.join(",")];
     filteredMasterData.forEach(d => {
       const dynamicCabinet = d.cabinetNo || allGroupedInvoices[d.client]?.find(inv => inv.date === d.date)?.cabinetNo || "";
@@ -575,7 +575,7 @@ const App = () => {
     const blob = new Blob(["\uFEFF" + csvRows.join("\n")], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `訂單進度總表_${activeMasterClient}_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `Tracking_Table_${activeMasterClient}_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
   };
 
@@ -585,11 +585,11 @@ const App = () => {
       Object.values(displayedGroupedInvoices).forEach(invs => invoicesToDownload.push(...invs));
 
       if (invoicesToDownload.length === 0) {
-          alert('當前篩選條件下沒有任何單據可以下載。請確認有過濾出資料！ / No SA found to download under current filter.');
+          alert('No SA found to download under current filter. Please ensure data is selected!');
           return;
       }
 
-      if (!window.confirm(`準備批次下載 ${invoicesToDownload.length} 張 SA PDF。\n(如為首次使用，瀏覽器可能會阻擋「自動下載多個檔案」，請務必點擊【允許】。) \n\nReady to batch download ${invoicesToDownload.length} SA PDFs.`)) return;
+      if (!window.confirm(`Ready to batch download ${invoicesToDownload.length} SA PDFs.\n(If this is your first time, the browser might block multiple downloads, please click 'Allow'.)`)) return;
 
       setIsDownloadingPdf(true);
       try {
@@ -613,7 +613,7 @@ const App = () => {
           }
       } catch (error) {
           console.error("PDF generation failed:", error);
-          alert("下載過程中發生錯誤，請稍後再試。 / Error occurred during download.");
+          alert("Error occurred during download. Please try again.");
       }
       setIsDownloadingPdf(false);
   };
@@ -668,15 +668,15 @@ const App = () => {
     try {
       const dataSummary = filteredMasterData.slice(0, 50).map(d => ({ date: d.date, client: d.client, product: d.product, qty: d.shippedQty, price: d.price }));
       const revenueSummary = revenueData.slice(0, 6).map(r => `${r.monthKey}: ${r.total} THB`).join('\n');
-      const systemPrompt = `您是專業分析師。單位均為泰銖(THB)。營收摘要：\n${revenueSummary}\n明細參考：${JSON.stringify(dataSummary)}`;
+      const systemPrompt = `You are a professional analyst. Units are in THB. Revenue Summary:\n${revenueSummary}\nDetails Ref:\n${JSON.stringify(dataSummary)}`;
       
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${keyToUse}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: `${systemPrompt}\n\n問題：${aiPrompt}` }] }] })
+        body: JSON.stringify({ contents: [{ parts: [{ text: `${systemPrompt}\n\nQuestion: ${aiPrompt}` }] }] })
       });
       const data = await res.json();
-      setAiResponse(data.candidates?.[0]?.content?.parts?.[0]?.text || "無回應");
-    } catch (e) { setAiResponse("錯誤：" + e.message); }
+      setAiResponse(data.candidates?.[0]?.content?.parts?.[0]?.text || "No Response");
+    } catch (e) { setAiResponse("Error: " + e.message); }
     finally { setIsAiLoading(false); }
   };
 
@@ -688,11 +688,11 @@ const App = () => {
           <h1 className="text-xl font-black text-white flex items-center gap-2"><Database className="w-6 h-6 text-emerald-400" /> EVERISE</h1>
           <div className="flex bg-slate-800 p-1 rounded-lg overflow-x-auto">
             {[
-              { id: 'dashboard', label: 'SA 請款單 / SA Dashboard', icon: LayoutDashboard },
-              { id: 'trackingTable', label: '客戶訂單總表 / Tracking Table', icon: FileSpreadsheet },
-              { id: 'masterTable', label: '年度明細管理 / Master Table', icon: TableIcon },
-              { id: 'revenueStats', label: '營業額統計 / Revenue Stats', icon: TrendingUp }, 
-              { id: 'dataManagement', label: '資料來源管理 / Data Source', icon: Archive },
+              { id: 'dashboard', label: 'SA Dashboard', icon: LayoutDashboard },
+              { id: 'trackingTable', label: 'Tracking Table', icon: FileSpreadsheet },
+              { id: 'masterTable', label: 'Master Table', icon: TableIcon },
+              { id: 'revenueStats', label: 'Revenue Stats', icon: TrendingUp }, 
+              { id: 'dataManagement', label: 'Data Management', icon: Archive },
             ].map(tab => (
               <button key={tab.id} onClick={() => setViewMode(tab.id)} className={`px-4 py-2 rounded-md text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${viewMode === tab.id ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'}`}>
                 <tab.icon className="w-4 h-4" /> {tab.label}
@@ -702,37 +702,37 @@ const App = () => {
         </div>
         <div className="flex gap-3 items-center">
           <button onClick={() => setShowRevenueModal(true)} className="bg-rose-500 hover:bg-rose-600 text-white px-4 py-2 rounded-lg cursor-pointer font-bold text-xs flex items-center gap-2 transition-colors shadow-sm">
-            <Plus className="w-4 h-4" /> 手動記帳 / Manual Entry
+            <Plus className="w-4 h-4" /> Manual Entry
           </button>
-          <button onClick={() => setShowAiModal(true)} className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg font-bold text-xs flex items-center gap-2 transition-colors"><Sparkles className="w-4 h-4" /> AI 分析 / AI Analysis</button>
+          <button onClick={() => setShowAiModal(true)} className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg font-bold text-xs flex items-center gap-2 transition-colors"><Sparkles className="w-4 h-4" /> AI Analysis</button>
           <button onClick={() => setViewMode('settings')} className="p-2 text-slate-400 hover:text-white"><Settings className="w-5 h-5" /></button>
           
           <label className={`bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg cursor-pointer font-bold text-xs flex items-center gap-2 shadow-sm transition-all ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
             {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-            {isUploading ? '處理中 / Processing...' : '匯入 CSV / Import CSV'}
+            {isUploading ? 'Processing...' : 'Import CSV'}
             <input type="file" accept=".csv" multiple className="hidden" onChange={handleFileUpload} disabled={isUploading} />
           </label>
         </div>
       </div>
       
-      {/* 全局獨立篩選列 */}
+      {/* Filter Bar */}
       <div className="bg-white border-b border-slate-200 px-6 py-2 flex gap-4 items-center print:hidden shadow-sm sticky top-[60px] z-40">
           <Filter className="w-4 h-4 text-slate-400" />
-          <span className="text-xs font-bold text-slate-400">全局篩選：</span>
+          <span className="text-xs font-bold text-slate-400">Global Filter:</span>
           
           <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="border border-slate-300 rounded-md text-sm font-bold text-slate-700 py-1 px-2 focus:ring-2 focus:ring-emerald-500 outline-none">
-              <option value="ALL">所有月份</option>
+              <option value="ALL">All Months</option>
               {availableMonths.map(m => <option key={m} value={m}>{m}</option>)}
           </select>
           
           <select value={filterOrigin} onChange={e => setFilterOrigin(e.target.value)} className="border border-slate-300 rounded-md text-sm font-bold text-slate-700 py-1 px-2 focus:ring-2 focus:ring-emerald-500 outline-none">
-              <option value="ALL">所有產地</option>
-              <option value="China">China (中國直送)</option>
-              <option value="ER">ER (倉庫)</option>
+              <option value="ALL">All Origins</option>
+              <option value="China">China</option>
+              <option value="ER">Warehouse (ER)</option>
           </select>
 
           <select value={activeMasterClient} onChange={e => setActiveMasterClient(e.target.value)} className="border border-slate-300 rounded-md text-sm font-bold text-slate-700 py-1 px-2 focus:ring-2 focus:ring-emerald-500 outline-none">
-              <option value="ALL">所有客戶</option>
+              <option value="ALL">All Clients</option>
               {sortedClients.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
 
@@ -743,7 +743,7 @@ const App = () => {
                   className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors disabled:opacity-50 shadow-sm"
               >
                   {isDownloadingPdf ? <Loader2 className="w-3 h-3 animate-spin"/> : <Download className="w-3 h-3"/>}
-                  {isDownloadingPdf ? '載入產生中 / Generating...' : '批次下載當前 SA / Batch Download SA (PDF)'}
+                  {isDownloadingPdf ? 'Generating...' : 'Batch Download SA (PDF)'}
               </button>
           </div>
       </div>
@@ -755,32 +755,32 @@ const App = () => {
       <div className="mb-6 flex justify-between items-center print:hidden">
         <div>
           <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2">
-            <FileSpreadsheet className="w-6 h-6 text-emerald-600" /> 客戶訂單總表
+            <FileSpreadsheet className="w-6 h-6 text-emerald-600" /> Tracking Table
           </h2>
         </div>
         <div className="flex gap-2">
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-            <input type="text" placeholder="搜尋關鍵字..." className="pl-8 pr-4 py-2 border rounded-lg text-sm w-48" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+            <input type="text" placeholder="Search keywords..." className="pl-8 pr-4 py-2 border rounded-lg text-sm w-48" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
           </div>
-          <button onClick={exportTrackingCSV} className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"><Download className="w-4 h-4" /> 匯出 / Export</button>
-          <button onClick={() => window.print()} className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"><Printer className="w-4 h-4" /> 列印 / Print</button>
+          <button onClick={exportTrackingCSV} className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"><Download className="w-4 h-4" /> Export</button>
+          <button onClick={() => window.print()} className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"><Printer className="w-4 h-4" /> Print</button>
         </div>
       </div>
       <div className="border border-slate-300 overflow-auto max-h-[75vh]">
         <table className="w-full text-left text-sm border-collapse">
           <thead className="bg-slate-100 sticky top-0 z-10 text-xs font-black text-slate-600 uppercase tracking-wider">
             <tr>
-              <th className="p-2 border-b border-r border-slate-300 w-24">下單日期</th>
-              <th className="p-2 border-b border-r border-slate-300 w-24">訂單</th>
-              <th className="p-2 border-b border-r border-slate-300 w-20">產地</th>
-              <th className="p-2 border-b border-r border-slate-300">品名規格</th>
-              <th className="p-2 border-b border-r border-slate-300 w-32">顏色</th>
-              <th className="p-2 border-b border-r border-slate-300 w-20 text-right">訂單數</th>
-              <th className="p-2 border-b border-r border-slate-300 w-20 text-right">實際出貨</th>
-              <th className="p-2 border-b border-r border-slate-300 w-20 text-right">未出貨</th>
-              <th className="p-2 border-b border-r border-slate-300 w-24 text-center">櫃號</th>
-              <th className="p-2 border-b border-slate-300 w-16 text-center">結案</th>
+              <th className="p-2 border-b border-r border-slate-300 w-24">Date</th>
+              <th className="p-2 border-b border-r border-slate-300 w-24">Order</th>
+              <th className="p-2 border-b border-r border-slate-300 w-20">Origin</th>
+              <th className="p-2 border-b border-r border-slate-300">Spec</th>
+              <th className="p-2 border-b border-r border-slate-300 w-32">Color</th>
+              <th className="p-2 border-b border-r border-slate-300 w-20 text-right">Order Qty</th>
+              <th className="p-2 border-b border-r border-slate-300 w-20 text-right">Shipped</th>
+              <th className="p-2 border-b border-r border-slate-300 w-20 text-right">Unshipped</th>
+              <th className="p-2 border-b border-r border-slate-300 w-24 text-center">C/NO</th>
+              <th className="p-2 border-b border-slate-300 w-16 text-center">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
@@ -803,7 +803,7 @@ const App = () => {
               </tr>
             ))}
             {filteredMasterData.length === 0 && (
-                <tr><td colSpan="10" className="p-8 text-center text-slate-400">目前沒有符合篩選的資料</td></tr>
+                <tr><td colSpan="10" className="p-8 text-center text-slate-400">No data matches the current filter</td></tr>
             )}
           </tbody>
         </table>
@@ -814,10 +814,10 @@ const App = () => {
   const MasterTableView = () => (
     <div className="p-6 animate-in fade-in duration-500 min-h-screen bg-slate-50">
       <div className="mb-6 flex justify-between items-center bg-white p-4 rounded-xl shadow-sm">
-        <h2 className="text-xl font-black text-slate-800 flex items-center gap-2"><Edit3 className="w-5 h-5 text-blue-600" /> 年度明細編輯 (Master Data)</h2>
+        <h2 className="text-xl font-black text-slate-800 flex items-center gap-2"><Edit3 className="w-5 h-5 text-blue-600" /> Master Data Edit</h2>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 w-4 h-4" />
-          <input type="text" placeholder="搜尋..." className="pl-9 pr-4 py-2 border rounded-lg text-sm w-64" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          <input type="text" placeholder="Search..." className="pl-9 pr-4 py-2 border rounded-lg text-sm w-64" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
         </div>
       </div>
       <div className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
@@ -825,15 +825,15 @@ const App = () => {
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-100 border-b border-slate-300 sticky top-0 z-10 text-xs font-bold text-slate-600">
               <tr>
-                <th className="p-3 w-24">日期</th>
-                <th className="p-3 w-20">客戶</th>
-                <th className="p-3 w-24">櫃號</th>
-                <th className="p-3 w-24">產地</th>
-                <th className="p-3">品名</th>
-                <th className="p-3 w-24">顏色</th>
-                <th className="p-3 w-32 text-right">出貨量 (支援算式)</th>
-                <th className="p-3 w-20 text-right">單價</th>
-                <th className="p-3 w-24 text-center">操作</th>
+                <th className="p-3 w-24">Date</th>
+                <th className="p-3 w-20">Client</th>
+                <th className="p-3 w-24">C/NO</th>
+                <th className="p-3 w-24">Origin</th>
+                <th className="p-3">Spec</th>
+                <th className="p-3 w-24">Color</th>
+                <th className="p-3 w-32 text-right">Shipped Qty</th>
+                <th className="p-3 w-20 text-right">Price</th>
+                <th className="p-3 w-24 text-center">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -843,7 +843,7 @@ const App = () => {
                     <>
                       <td className="p-2"><input className="border rounded p-1 w-full" defaultValue={d.date} onChange={e => handleEditChange('date', e.target.value)} /></td>
                       <td className="p-2 font-bold">{d.client}</td>
-                      <td className="p-2"><input className="border rounded p-1 w-full font-bold text-blue-600" defaultValue={d.cabinetNo || allGroupedInvoices[d.client]?.find(inv => inv.date === d.date)?.cabinetNo || ''} onChange={e => handleEditChange('cabinetNo', e.target.value)} placeholder="手動覆蓋" /></td>
+                      <td className="p-2"><input className="border rounded p-1 w-full font-bold text-blue-600" defaultValue={d.cabinetNo || allGroupedInvoices[d.client]?.find(inv => inv.date === d.date)?.cabinetNo || ''} onChange={e => handleEditChange('cabinetNo', e.target.value)} placeholder="Manual Override" /></td>
                       <td className="p-2">
                           <select className="border rounded p-1 w-full" defaultValue={d.origin || 'ER'} onChange={e => handleEditChange('origin', e.target.value)}>
                               <option value="ER">ER</option>
@@ -880,7 +880,7 @@ const App = () => {
                 </tr>
               ))}
               {filteredMasterData.length === 0 && (
-                  <tr><td colSpan="9" className="p-8 text-center text-slate-400">目前沒有符合篩選的資料</td></tr>
+                  <tr><td colSpan="9" className="p-8 text-center text-slate-400">No data matches the current filter</td></tr>
               )}
             </tbody>
           </table>
@@ -892,7 +892,7 @@ const App = () => {
   const Dashboard = () => {
     const updateStartNo = async (client, currentStart, count) => {
         const nextStart = currentStart + count;
-        if (window.confirm(`確認要更新 ${client} 的起始櫃號嗎？\n\n目前起始：${currentStart}\n本批單數：${count}\n\n更新後下次將從 [ ${nextStart} ] 開始編號。`)) {
+        if (window.confirm(`Are you sure you want to update the starting C/NO for ${client}?\n\nCurrent Start: ${currentStart}\nThis Batch: ${count}\n\nNext C/NO will be [ ${nextStart} ].`)) {
             const newConfig = { ...clientConfig };
             if (!newConfig[client]) {
                 newConfig[client] = { startNo: nextStart, prefix: client };
@@ -905,7 +905,7 @@ const App = () => {
 
     const manualEditStartNo = async (client) => {
         const current = clientConfig[client]?.startNo || 1;
-        const input = prompt(`請手動輸入 ${client} 的起始櫃號：`, current);
+        const input = prompt(`Please manually input the starting C/NO for ${client}:`, current);
         if (input && !isNaN(input)) {
             const newNo = parseInt(input);
             const newConfig = { ...clientConfig };
@@ -922,7 +922,7 @@ const App = () => {
         {dashboardClients.length === 0 ? (
           <div className="text-center py-40 border-4 border-dashed border-slate-200 rounded-3xl">
              <LayoutDashboard className="w-20 h-20 text-slate-300 mx-auto mb-4" />
-             <p className="text-slate-400 font-bold text-xl">當前篩選條件下沒有任何 SA 單據</p>
+             <p className="text-slate-400 font-bold text-xl">No SA found under current filter</p>
           </div>
         ) : (
           dashboardClients.map(client => {
@@ -936,7 +936,7 @@ const App = () => {
                   <div>
                     <div className="flex items-center gap-4 mb-3">
                       <span className="bg-slate-900 text-white px-6 py-2 rounded-xl font-black text-3xl shadow-lg">{client}</span>
-                      <h2 className="text-xl font-bold text-slate-400">請款單列表</h2>
+                      <h2 className="text-xl font-bold text-slate-400">Invoice List</h2>
                     </div>
                     <div className="bg-white border border-slate-300 rounded-lg p-3 flex items-center gap-4 shadow-sm">
                         <div className="flex flex-col">
@@ -949,21 +949,21 @@ const App = () => {
                         <div className="h-8 w-px bg-slate-200"></div>
                         <div className="flex flex-col">
                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">This View</span>
-                             <span className="font-mono font-bold text-blue-600">+{currentInvoices.length} 張</span>
+                             <span className="font-mono font-bold text-blue-600">+{currentInvoices.length}</span>
                         </div>
                         <div className="h-8 w-px bg-slate-200"></div>
                         <button 
                             onClick={() => updateStartNo(client, config.startNo, currentInvoices.length)}
                             className="bg-slate-100 hover:bg-slate-800 hover:text-white text-slate-600 px-3 py-1.5 rounded-md text-xs font-bold transition-colors flex items-center gap-2"
                         >
-                            <span>設定下次開始 / Set Next Start</span>
+                            <span>Set Next Start</span>
                             <span className="bg-yellow-300 text-black px-1 rounded font-mono mx-1">#{nextStartNo}</span>
                             <ChevronRight className="w-3 h-3" />
                         </button>
                     </div>
                   </div>
                   <button onClick={() => { setActiveClient(client); setViewMode('printAll'); }} className="bg-emerald-600 text-white px-5 py-3 rounded-xl font-bold flex items-center gap-2 shadow-md hover:bg-emerald-700 hover:-translate-y-0.5 transition-all">
-                    <Layers className="w-5 h-5" /> 列印畫面中所有 SA / Print All SA in View
+                    <Layers className="w-5 h-5" /> Print All SA in View
                   </button>
                 </div>
 
@@ -982,7 +982,7 @@ const App = () => {
                           </div>
                           <div className="text-2xl font-black text-slate-800 mb-1">{inv.date}</div>
                           <div className="text-xs text-slate-400 font-bold flex items-center gap-1">
-                              <Package className="w-3 h-3" /> {inv.items.length} 筆明細
+                              <Package className="w-3 h-3" /> {inv.items.length} Items
                           </div>
                           <div className="mt-6 pt-4 border-t border-slate-100 text-right">
                             <span className="text-2xl font-black text-emerald-600 tracking-tight">
@@ -1051,8 +1051,8 @@ const App = () => {
   const PrintAllView = () => (
     <div className="bg-slate-200 min-h-screen py-10 print:bg-white print:p-0 flex flex-col items-center">
       <div className="w-[210mm] mb-6 flex justify-between items-center print:hidden px-4">
-        <button onClick={() => setViewMode('dashboard')} className="text-slate-700 flex items-center gap-2 hover:text-blue-700 font-bold"><ArrowLeft className="w-5 h-5" /> 返回儀表板 / Back to Dashboard</button>
-        <button onClick={() => window.print()} className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 shadow-xl"><Printer className="w-5 h-5" /> 列印全部 / Print All</button>
+        <button onClick={() => setViewMode('dashboard')} className="text-slate-700 flex items-center gap-2 hover:text-blue-700 font-bold"><ArrowLeft className="w-5 h-5" /> Back to Dashboard</button>
+        <button onClick={() => window.print()} className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 shadow-xl"><Printer className="w-5 h-5" /> Print All</button>
       </div>
       <div id="print-area">
         {displayedGroupedInvoices[activeClient]?.map(inv => (
@@ -1070,7 +1070,7 @@ const App = () => {
       <AiModal show={showAiModal} onClose={() => setShowAiModal(false)} prompt={aiPrompt} setPrompt={setAiPrompt} onSend={callGemini} response={aiResponse} loading={isAiLoading} hasKey={!!userApiKey} />
       <ManualRevenueModal show={showRevenueModal} onClose={() => setShowRevenueModal(false)} onSave={addManualRevenue} />
       
-      {/* 隱藏的 PDF 渲染容器，供批次下載時抓取截圖 */}
+      {/* Hidden PDF container */}
       <div className="absolute top-[-9999px] left-[-9999px] opacity-0 pointer-events-none z-[-50]">
           {Object.values(displayedGroupedInvoices).flat().map(inv => (
               <div key={inv.id} id={`invoice-capture-${inv.id}`}>
@@ -1087,8 +1087,8 @@ const App = () => {
         {viewMode === 'revenueStats' && (
             <div className="max-w-6xl mx-auto space-y-6">
                 <div className="flex justify-between items-center">
-                    <h2 className="text-3xl font-black">年度營業額統計</h2>
-                    <button onClick={() => setShowRevenueModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"><Plus className="w-4 h-4"/>新增營收 / Add Revenue</button>
+                    <h2 className="text-3xl font-black">Annual Revenue Stats</h2>
+                    <button onClick={() => setShowRevenueModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"><Plus className="w-4 h-4"/>Add Revenue</button>
                 </div>
                 
                 {revenueData.map((data) => (
@@ -1096,7 +1096,7 @@ const App = () => {
                         <div className="p-6 flex flex-col md:flex-row gap-6 items-start">
                             <div className="w-full md:w-48 shrink-0 border-b md:border-b-0 md:border-r border-slate-100 pb-4 md:pb-0 md:pr-4">
                                 <div className="text-sm font-bold text-slate-400 uppercase tracking-wider">{data.year}</div>
-                                <div className="text-4xl font-black text-slate-800">{data.month} <span className="text-lg text-slate-400">月</span></div>
+                                <div className="text-4xl font-black text-slate-800">{data.month}</div>
                                 <div className="mt-2 text-xl font-black text-emerald-600 flex items-center gap-1">
                                     <span className="text-xs text-emerald-400">THB</span>
                                     {data.total.toLocaleString()}
@@ -1107,16 +1107,16 @@ const App = () => {
                                 
                                 <div className="mt-4 space-y-2 border-t border-slate-100 pt-2">
                                     <div className="flex justify-between items-center text-sm">
-                                        <span className="text-slate-400 font-bold flex items-center gap-1"><Package className="w-3 h-3" /> 倉庫</span>
+                                        <span className="text-slate-400 font-bold flex items-center gap-1"><Package className="w-3 h-3" /> Warehouse</span>
                                         <span className="font-mono font-bold text-blue-600">{data.warehouseTotal.toLocaleString()}</span>
                                     </div>
                                     <div className="flex justify-between items-center text-sm">
-                                        <span className="text-slate-400 font-bold flex items-center gap-1"><MapPin className="w-3 h-3" /> 中國</span>
+                                        <span className="text-slate-400 font-bold flex items-center gap-1"><MapPin className="w-3 h-3" /> China</span>
                                         <span className="font-mono font-bold text-red-500">{data.chinaTotal.toLocaleString()}</span>
                                     </div>
                                     {data.otherTotal > 0 && (
                                         <div className="flex justify-between items-center text-sm">
-                                            <span className="text-slate-400 font-bold flex items-center gap-1"><Hash className="w-3 h-3" /> 其他</span>
+                                            <span className="text-slate-400 font-bold flex items-center gap-1"><Hash className="w-3 h-3" /> Other</span>
                                             <span className="font-mono font-bold text-yellow-600">{data.otherTotal.toLocaleString()}</span>
                                         </div>
                                     )}
@@ -1144,9 +1144,9 @@ const App = () => {
                                             </div>
 
                                             <div className="mt-1 text-[10px] text-slate-400 flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity absolute top-full left-0 bg-white p-2 shadow-xl z-10 w-40 border rounded pointer-events-none">
-                                                 {client.sources['Warehouse'] > 0 && <span className="flex justify-between"><span>📦 倉庫</span> <span>{client.sources['Warehouse'].toLocaleString()}</span></span>}
-                                                 {client.sources['China'] > 0 && <span className="flex justify-between text-red-400 font-bold"><span>🇨🇳 中國</span> <span>{client.sources['China'].toLocaleString()}</span></span>}
-                                                 {client.sources['Other'] > 0 && <span className="flex justify-between text-yellow-600"><span>🔸 其他</span> <span>{client.sources['Other'].toLocaleString()}</span></span>}
+                                                 {client.sources['Warehouse'] > 0 && <span className="flex justify-between"><span>📦 Warehouse</span> <span>{client.sources['Warehouse'].toLocaleString()}</span></span>}
+                                                 {client.sources['China'] > 0 && <span className="flex justify-between text-red-400 font-bold"><span>🇨🇳 China</span> <span>{client.sources['China'].toLocaleString()}</span></span>}
+                                                 {client.sources['Other'] > 0 && <span className="flex justify-between text-yellow-600"><span>🔸 Other</span> <span>{client.sources['Other'].toLocaleString()}</span></span>}
                                             </div>
                                         </div>
                                     ))}
@@ -1158,19 +1158,19 @@ const App = () => {
                 
                 <div className="mt-12 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                     <h3 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
-                        <Edit3 className="w-5 h-5 text-blue-500" /> 手動輸入紀錄明細 (Manual Entries)
+                        <Edit3 className="w-5 h-5 text-blue-500" /> Manual Entry Records
                     </h3>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm text-left">
                             <thead className="bg-slate-50 text-xs text-slate-500 font-bold border-b border-slate-100">
                                 <tr>
-                                    <th className="p-3">日期</th>
-                                    <th className="p-3">客戶</th>
-                                    <th className="p-3">櫃號</th>
-                                    <th className="p-3">來源</th>
-                                    <th className="p-3 text-right">金額 (THB)</th>
-                                    <th className="p-3">備註</th>
-                                    <th className="p-3 text-center">操作</th>
+                                    <th className="p-3">Date</th>
+                                    <th className="p-3">Client</th>
+                                    <th className="p-3">C/NO</th>
+                                    <th className="p-3">Origin</th>
+                                    <th className="p-3 text-right">Amount (THB)</th>
+                                    <th className="p-3">Note</th>
+                                    <th className="p-3 text-center">Action</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
@@ -1198,7 +1198,7 @@ const App = () => {
                                     </tr>
                                 ))}
                                 {manualRevenueData.length === 0 && (
-                                    <tr><td colSpan="7" className="p-8 text-center text-slate-400">目前沒有手動輸入的紀錄</td></tr>
+                                    <tr><td colSpan="7" className="p-8 text-center text-slate-400">No manual records found</td></tr>
                                 )}
                             </tbody>
                         </table>
@@ -1210,8 +1210,8 @@ const App = () => {
         {viewMode === 'preview' && (
             <div className="py-10 bg-slate-200 min-h-screen">
                 <div className="max-w-[210mm] mx-auto mb-6 flex justify-between print:hidden">
-                    <button onClick={() => setViewMode('dashboard')} className="font-bold flex items-center gap-2"><ArrowLeft/>返回 / Back</button>
-                    <button onClick={() => window.print()} className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2"><Printer/>列印 / Print</button>
+                    <button onClick={() => setViewMode('dashboard')} className="font-bold flex items-center gap-2"><ArrowLeft/>Back</button>
+                    <button onClick={() => window.print()} className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2"><Printer/>Print</button>
                 </div>
                 <div id="print-area">
                     <InvoiceTemplate inv={(allGroupedInvoices[activeClient] || []).find(i => i.id === selectedInvoiceId)} />
@@ -1226,15 +1226,15 @@ const App = () => {
         {viewMode === 'dataManagement' && (
              <div className="p-8 max-w-4xl mx-auto min-h-screen bg-slate-50 animate-in fade-in">
                 <h2 className="text-3xl font-black text-slate-800 flex items-center gap-3 mb-8">
-                    <Archive className="w-8 h-8 text-emerald-600" /> 資料來源管理
+                    <Archive className="w-8 h-8 text-emerald-600" /> Data Source Management
                 </h2>
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                     <table className="w-full text-left">
                         <thead className="bg-slate-100 text-xs font-bold text-slate-600 border-b border-slate-200">
                             <tr>
-                                <th className="p-4">來源檔案名稱 (Source)</th>
-                                <th className="p-4 text-center">資料筆數</th>
-                                <th className="p-4 text-right">操作</th>
+                                <th className="p-4">Source File</th>
+                                <th className="p-4 text-center">Records Count</th>
+                                <th className="p-4 text-right">Action</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -1242,11 +1242,11 @@ const App = () => {
                                  <tr key={source} className="hover:bg-red-50 group transition-colors">
                                      <td className="p-4 font-mono text-sm font-bold text-slate-700">{source}</td>
                                      <td className="p-4 text-center">
-                                         <span className="bg-slate-100 px-3 py-1 rounded-full text-xs font-black text-slate-600">{masterData.filter(d => d.source === source).length} 筆</span>
+                                         <span className="bg-slate-100 px-3 py-1 rounded-full text-xs font-black text-slate-600">{masterData.filter(d => d.source === source).length} Records</span>
                                      </td>
                                      <td className="p-4 text-right">
                                          <button onClick={() => deleteBatchBySource(source)} className="text-slate-400 hover:text-red-600 font-bold text-sm flex items-center gap-1 ml-auto transition-colors px-3 py-1 rounded hover:bg-red-100">
-                                             <Trash2 className="w-4 h-4" /> 刪除整批 / Delete Batch
+                                             <Trash2 className="w-4 h-4" /> Delete Batch
                                          </button>
                                      </td>
                                  </tr>
@@ -1261,12 +1261,12 @@ const App = () => {
             <div className="max-w-md mx-auto space-y-6">
                 <div className="bg-white p-6 rounded-2xl shadow-sm border">
                     <h3 className="font-black mb-4 flex items-center gap-2"><KeyRound className="text-purple-600"/> Gemini API Key</h3>
-                    <input type="password" value={userApiKey} onChange={e => { setUserApiKey(e.target.value); localStorage.setItem('everise_gemini_key', e.target.value); }} className="w-full border p-2 rounded bg-slate-50" placeholder="貼上 API Key"/>
+                    <input type="password" value={userApiKey} onChange={e => { setUserApiKey(e.target.value); localStorage.setItem('everise_gemini_key', e.target.value); }} className="w-full border p-2 rounded bg-slate-50" placeholder="Paste API Key"/>
                 </div>
                 <div className="bg-white p-6 rounded-2xl shadow-sm border">
-                    <h3 className="font-black mb-4 flex items-center gap-2"><RefreshCw className="text-blue-600"/> 重置櫃號設定</h3>
-                    <p className="text-xs text-slate-500 mb-4">如果您發現櫃號起始值沒有更新（例如仍是舊的），請點擊下方按鈕強制重置為系統最新的預設值。</p>
-                    <button onClick={resetConfigToDefaults} className="w-full bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-2 rounded-lg transition-colors">重置為最新預設值 / Reset to Default</button>
+                    <h3 className="font-black mb-4 flex items-center gap-2"><RefreshCw className="text-blue-600"/> Reset C/NO Settings</h3>
+                    <p className="text-xs text-slate-500 mb-4">If you find that the starting cabinet number hasn't updated, please click the button below to force a reset to the latest system defaults.</p>
+                    <button onClick={resetConfigToDefaults} className="w-full bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-2 rounded-lg transition-colors">Reset to Default</button>
                 </div>
             </div>
         )}
