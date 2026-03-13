@@ -160,7 +160,7 @@ const AiModal = ({ show, onClose, prompt, setPrompt, onSend, response, loading, 
             className="bg-purple-600 text-white px-6 py-2 rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
-            {loading ? '分析中...' : '送出'}
+            {loading ? '分析中 / Analyzing...' : '送出 / Send'}
           </button>
         </div>
       </div>
@@ -242,8 +242,8 @@ const ManualRevenueModal = ({ show, onClose, onSave }) => {
                     </div>
                 </div>
                 <div className="mt-8 flex gap-3">
-                    <button onClick={onClose} className="flex-1 py-3 rounded-lg font-bold text-slate-500 hover:bg-slate-100">關閉</button>
-                    <button onClick={handleSubmit} className="flex-[2] py-3 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200">儲存並新增下一筆</button>
+                    <button onClick={onClose} className="flex-1 py-3 rounded-lg font-bold text-slate-500 hover:bg-slate-100">關閉 / Close</button>
+                    <button onClick={handleSubmit} className="flex-[2] py-3 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200">儲存並新增下一筆 / Save & Add Next</button>
                 </div>
             </div>
         </div>
@@ -333,7 +333,7 @@ const App = () => {
   };
 
   const deleteBatchBySource = async (sourceName) => {
-      if (!window.confirm(`警告：確定刪除來自 "${sourceName}" 的所有資料？`)) return;
+      if (!window.confirm(`警告：確定刪除來自 "${sourceName}" 的所有資料？ / Confirm deletion?`)) return;
       setSyncStatus('syncing');
       try {
           const targets = masterData.filter(d => d.source === sourceName);
@@ -345,7 +345,7 @@ const App = () => {
               await batch.commit();
           }
       } catch(e) {
-          alert('刪除失敗，請檢查權限設定！錯誤：' + e.message);
+          alert('刪除失敗，請檢查權限設定！ / Delete failed: ' + e.message);
       }
       setSyncStatus('idle');
   };
@@ -355,24 +355,24 @@ const App = () => {
           await addDoc(collection(db, 'everise_system', 'shared', 'manual_revenue'), { ...data, timestamp: Date.now() });
           setShowRevenueModal(false);
       } catch(e) {
-          alert('寫入失敗，請檢查 Firebase 權限！錯誤：' + e.message);
+          alert('寫入失敗，請檢查 Firebase 權限！ / Save failed: ' + e.message);
       }
   };
 
   const deleteManualRevenue = async (id) => {
-      if(window.confirm("確定刪除此筆營收紀錄？")) {
+      if(window.confirm("確定刪除此筆營收紀錄？ / Confirm deletion?")) {
           try {
               await deleteDoc(doc(db, 'everise_system', 'shared', 'manual_revenue', id));
-          } catch(e) { alert('刪除失敗：' + e.message); }
+          } catch(e) { alert('刪除失敗 / Delete failed: ' + e.message); }
       }
   };
 
   const resetConfigToDefaults = async () => {
-    if (window.confirm("確定要將所有客戶的櫃號起始值重置為系統預設值嗎？")) {
+    if (window.confirm("確定要將所有客戶的櫃號起始值重置為系統預設值嗎？ / Confirm reset to defaults?")) {
       try {
           await setDoc(doc(db, 'everise_system', 'shared', 'settings', 'config'), { clientConfig: DEFAULT_CLIENT_CONFIG }, { merge: true });
-          alert("重置完成！");
-      } catch(e) { alert('重置失敗：' + e.message); }
+          alert("重置完成！ / Reset completed!");
+      } catch(e) { alert('重置失敗 / Reset failed: ' + e.message); }
     }
   };
 
@@ -401,15 +401,15 @@ const App = () => {
 
     try {
         updateMasterDataRow(editingId, updates);
-    } catch(e) { alert('儲存失敗：' + e.message); }
+    } catch(e) { alert('儲存失敗 / Save failed: ' + e.message); }
     
     setEditingId(null);
     editValues.current = {};
   };
 
   const handleDelete = (id) => {
-      if(window.confirm("確定要永久刪除此筆資料嗎？")) {
-          deleteMasterDataRow(id).catch(e => alert('刪除失敗：'+e.message));
+      if(window.confirm("確定要永久刪除此筆資料嗎？ / Confirm permanent deletion?")) {
+          deleteMasterDataRow(id).catch(e => alert('刪除失敗 / Delete failed: '+e.message));
       }
   }
 
@@ -496,7 +496,7 @@ const App = () => {
             await Promise.all(promises.filter(p => p !== null));
         }
         
-        alert("✅ 上傳成功！");
+        alert("✅ 上傳成功！ / Upload Successful!");
         setViewMode('dashboard');
         
     } catch (error) {
@@ -585,11 +585,11 @@ const App = () => {
       Object.values(displayedGroupedInvoices).forEach(invs => invoicesToDownload.push(...invs));
 
       if (invoicesToDownload.length === 0) {
-          alert('當前篩選條件下沒有任何單據可以下載。請確認有過濾出資料！');
+          alert('當前篩選條件下沒有任何單據可以下載。請確認有過濾出資料！ / No SA found to download under current filter.');
           return;
       }
 
-      if (!window.confirm(`準備批次下載 ${invoicesToDownload.length} 張 SA PDF。\n(如為首次使用，瀏覽器可能會阻擋「自動下載多個檔案」，請務必點擊【允許】。)`)) return;
+      if (!window.confirm(`準備批次下載 ${invoicesToDownload.length} 張 SA PDF。\n(如為首次使用，瀏覽器可能會阻擋「自動下載多個檔案」，請務必點擊【允許】。) \n\nReady to batch download ${invoicesToDownload.length} SA PDFs.`)) return;
 
       setIsDownloadingPdf(true);
       try {
@@ -613,7 +613,7 @@ const App = () => {
           }
       } catch (error) {
           console.error("PDF generation failed:", error);
-          alert("下載過程中發生錯誤，請稍後再試。");
+          alert("下載過程中發生錯誤，請稍後再試。 / Error occurred during download.");
       }
       setIsDownloadingPdf(false);
   };
@@ -688,11 +688,11 @@ const App = () => {
           <h1 className="text-xl font-black text-white flex items-center gap-2"><Database className="w-6 h-6 text-emerald-400" /> EVERISE</h1>
           <div className="flex bg-slate-800 p-1 rounded-lg overflow-x-auto">
             {[
-              { id: 'dashboard', label: 'SA 請款單', icon: LayoutDashboard },
-              { id: 'trackingTable', label: '客戶訂單總表', icon: FileSpreadsheet },
-              { id: 'masterTable', label: '年度明細管理', icon: TableIcon },
-              { id: 'revenueStats', label: '營業額統計', icon: TrendingUp }, 
-              { id: 'dataManagement', label: '資料來源管理', icon: Archive },
+              { id: 'dashboard', label: 'SA 請款單 / SA Dashboard', icon: LayoutDashboard },
+              { id: 'trackingTable', label: '客戶訂單總表 / Tracking Table', icon: FileSpreadsheet },
+              { id: 'masterTable', label: '年度明細管理 / Master Table', icon: TableIcon },
+              { id: 'revenueStats', label: '營業額統計 / Revenue Stats', icon: TrendingUp }, 
+              { id: 'dataManagement', label: '資料來源管理 / Data Source', icon: Archive },
             ].map(tab => (
               <button key={tab.id} onClick={() => setViewMode(tab.id)} className={`px-4 py-2 rounded-md text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${viewMode === tab.id ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'}`}>
                 <tab.icon className="w-4 h-4" /> {tab.label}
@@ -702,14 +702,14 @@ const App = () => {
         </div>
         <div className="flex gap-3 items-center">
           <button onClick={() => setShowRevenueModal(true)} className="bg-rose-500 hover:bg-rose-600 text-white px-4 py-2 rounded-lg cursor-pointer font-bold text-xs flex items-center gap-2 transition-colors shadow-sm">
-            <Plus className="w-4 h-4" /> 手動記帳
+            <Plus className="w-4 h-4" /> 手動記帳 / Manual Entry
           </button>
-          <button onClick={() => setShowAiModal(true)} className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg font-bold text-xs flex items-center gap-2 transition-colors"><Sparkles className="w-4 h-4" /> AI 分析</button>
+          <button onClick={() => setShowAiModal(true)} className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg font-bold text-xs flex items-center gap-2 transition-colors"><Sparkles className="w-4 h-4" /> AI 分析 / AI Analysis</button>
           <button onClick={() => setViewMode('settings')} className="p-2 text-slate-400 hover:text-white"><Settings className="w-5 h-5" /></button>
           
           <label className={`bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg cursor-pointer font-bold text-xs flex items-center gap-2 shadow-sm transition-all ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
             {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-            {isUploading ? '處理中...' : '匯入 CSV'}
+            {isUploading ? '處理中 / Processing...' : '匯入 CSV / Import CSV'}
             <input type="file" accept=".csv" multiple className="hidden" onChange={handleFileUpload} disabled={isUploading} />
           </label>
         </div>
@@ -743,7 +743,7 @@ const App = () => {
                   className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors disabled:opacity-50 shadow-sm"
               >
                   {isDownloadingPdf ? <Loader2 className="w-3 h-3 animate-spin"/> : <Download className="w-3 h-3"/>}
-                  {isDownloadingPdf ? '載入產生中...' : '批次下載當前 SA (PDF)'}
+                  {isDownloadingPdf ? '載入產生中 / Generating...' : '批次下載當前 SA / Batch Download SA (PDF)'}
               </button>
           </div>
       </div>
@@ -763,8 +763,8 @@ const App = () => {
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
             <input type="text" placeholder="搜尋關鍵字..." className="pl-8 pr-4 py-2 border rounded-lg text-sm w-48" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
           </div>
-          <button onClick={exportTrackingCSV} className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"><Download className="w-4 h-4" /> 匯出</button>
-          <button onClick={() => window.print()} className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"><Printer className="w-4 h-4" /> 列印</button>
+          <button onClick={exportTrackingCSV} className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"><Download className="w-4 h-4" /> 匯出 / Export</button>
+          <button onClick={() => window.print()} className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"><Printer className="w-4 h-4" /> 列印 / Print</button>
         </div>
       </div>
       <div className="border border-slate-300 overflow-auto max-h-[75vh]">
@@ -956,15 +956,14 @@ const App = () => {
                             onClick={() => updateStartNo(client, config.startNo, currentInvoices.length)}
                             className="bg-slate-100 hover:bg-slate-800 hover:text-white text-slate-600 px-3 py-1.5 rounded-md text-xs font-bold transition-colors flex items-center gap-2"
                         >
-                            <span>設定下次從</span>
-                            <span className="bg-yellow-300 text-black px-1 rounded font-mono">#{nextStartNo}</span>
-                            <span>開始</span>
+                            <span>設定下次開始 / Set Next Start</span>
+                            <span className="bg-yellow-300 text-black px-1 rounded font-mono mx-1">#{nextStartNo}</span>
                             <ChevronRight className="w-3 h-3" />
                         </button>
                     </div>
                   </div>
                   <button onClick={() => { setActiveClient(client); setViewMode('printAll'); }} className="bg-emerald-600 text-white px-5 py-3 rounded-xl font-bold flex items-center gap-2 shadow-md hover:bg-emerald-700 hover:-translate-y-0.5 transition-all">
-                    <Layers className="w-5 h-5" /> 列印畫面中所有 SA
+                    <Layers className="w-5 h-5" /> 列印畫面中所有 SA / Print All SA in View
                   </button>
                 </div>
 
@@ -1052,8 +1051,8 @@ const App = () => {
   const PrintAllView = () => (
     <div className="bg-slate-200 min-h-screen py-10 print:bg-white print:p-0 flex flex-col items-center">
       <div className="w-[210mm] mb-6 flex justify-between items-center print:hidden px-4">
-        <button onClick={() => setViewMode('dashboard')} className="text-slate-700 flex items-center gap-2 hover:text-blue-700 font-bold"><ArrowLeft className="w-5 h-5" /> 返回儀表板</button>
-        <button onClick={() => window.print()} className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 shadow-xl"><Printer className="w-5 h-5" /> 列印全部</button>
+        <button onClick={() => setViewMode('dashboard')} className="text-slate-700 flex items-center gap-2 hover:text-blue-700 font-bold"><ArrowLeft className="w-5 h-5" /> 返回儀表板 / Back to Dashboard</button>
+        <button onClick={() => window.print()} className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 shadow-xl"><Printer className="w-5 h-5" /> 列印全部 / Print All</button>
       </div>
       <div id="print-area">
         {displayedGroupedInvoices[activeClient]?.map(inv => (
@@ -1089,7 +1088,7 @@ const App = () => {
             <div className="max-w-6xl mx-auto space-y-6">
                 <div className="flex justify-between items-center">
                     <h2 className="text-3xl font-black">年度營業額統計</h2>
-                    <button onClick={() => setShowRevenueModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"><Plus className="w-4 h-4"/>新增營收</button>
+                    <button onClick={() => setShowRevenueModal(true)} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"><Plus className="w-4 h-4"/>新增營收 / Add Revenue</button>
                 </div>
                 
                 {revenueData.map((data) => (
@@ -1211,8 +1210,8 @@ const App = () => {
         {viewMode === 'preview' && (
             <div className="py-10 bg-slate-200 min-h-screen">
                 <div className="max-w-[210mm] mx-auto mb-6 flex justify-between print:hidden">
-                    <button onClick={() => setViewMode('dashboard')} className="font-bold flex items-center gap-2"><ArrowLeft/>返回</button>
-                    <button onClick={() => window.print()} className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2"><Printer/>列印</button>
+                    <button onClick={() => setViewMode('dashboard')} className="font-bold flex items-center gap-2"><ArrowLeft/>返回 / Back</button>
+                    <button onClick={() => window.print()} className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2"><Printer/>列印 / Print</button>
                 </div>
                 <div id="print-area">
                     <InvoiceTemplate inv={(allGroupedInvoices[activeClient] || []).find(i => i.id === selectedInvoiceId)} />
@@ -1247,7 +1246,7 @@ const App = () => {
                                      </td>
                                      <td className="p-4 text-right">
                                          <button onClick={() => deleteBatchBySource(source)} className="text-slate-400 hover:text-red-600 font-bold text-sm flex items-center gap-1 ml-auto transition-colors px-3 py-1 rounded hover:bg-red-100">
-                                             <Trash2 className="w-4 h-4" /> 刪除整批
+                                             <Trash2 className="w-4 h-4" /> 刪除整批 / Delete Batch
                                          </button>
                                      </td>
                                  </tr>
@@ -1267,7 +1266,7 @@ const App = () => {
                 <div className="bg-white p-6 rounded-2xl shadow-sm border">
                     <h3 className="font-black mb-4 flex items-center gap-2"><RefreshCw className="text-blue-600"/> 重置櫃號設定</h3>
                     <p className="text-xs text-slate-500 mb-4">如果您發現櫃號起始值沒有更新（例如仍是舊的），請點擊下方按鈕強制重置為系統最新的預設值。</p>
-                    <button onClick={resetConfigToDefaults} className="w-full bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-2 rounded-lg transition-colors">重置為最新預設值</button>
+                    <button onClick={resetConfigToDefaults} className="w-full bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-2 rounded-lg transition-colors">重置為最新預設值 / Reset to Default</button>
                 </div>
             </div>
         )}
