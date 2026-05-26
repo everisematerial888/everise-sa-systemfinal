@@ -516,18 +516,28 @@ const App = () => {
     const res = {};
     sortedClients.forEach(c => {
         const rows = masterData.filter(d => d.client === c && d.shippedQty > 0);
-        const dates = [...new Set(rows.map(r => r.date))].sort((a, b) => new Date(a) - new Date(b));
         
-        res[c] = dates.map((date, idx) => {
-            const items = rows.filter(r => r.date === date);
+        // 修正重點：同時依據「日期」與「產地」分組，避免同一天出中國與倉庫時被合併
+        const dateOriginKeys = [...new Set(rows.map(r => `${r.date}|${r.origin || 'ER'}`))];
+        
+        dateOriginKeys.sort((a, b) => {
+            const dateA = new Date(a.split('|')[0]);
+            const dateB = new Date(b.split('|')[0]);
+            if (dateA < dateB) return -1;
+            if (dateA > dateB) return 1;
+            return a.localeCompare(b);
+        });
+
+        res[c] = dateOriginKeys.map((key, idx) => {
+            const [date, origin] = key.split('|');
+            const items = rows.filter(r => r.date === date && (r.origin || 'ER') === origin);
             const conf = clientConfig[c] || { startNo: 1, prefix: c };
             const paddedNo = String(conf.startNo + idx).padStart(3, '0');
-            const origin = items[0]?.origin || 'ER'; 
             
             const total = items.reduce((s, i) => s + Math.round(i.shippedQty * i.price), 0);
             
             return { 
-                id: `${c}-${date}`, 
+                id: `${c}-${date}-${origin}`, 
                 date, 
                 cabinetNo: items[0]?.cabinetNo || `${conf.prefix}#${paddedNo}`, 
                 client: c, 
@@ -568,7 +578,7 @@ const App = () => {
     const headers = ["Date", "Order", "Origin", "Spec", "Color", "Order Qty", "Shipped", "Unshipped", "C/NO", "Status", "Note"];
     const csvRows = [headers.join(",")];
     filteredMasterData.forEach(d => {
-      const dynamicCabinet = d.cabinetNo || allGroupedInvoices[d.client]?.find(inv => inv.date === d.date)?.cabinetNo || "";
+      const dynamicCabinet = d.cabinetNo || allGroupedInvoices[d.client]?.find(inv => inv.date === d.date && inv.origin === (d.origin || 'ER'))?.cabinetNo || "";
       const row = [d.date, d.orderNo, d.origin, `"${d.product}"`, d.color, d.orderQty || 0, `"${d.shippedDisplay || d.shippedQty}"`, (d.orderQty || 0) - d.shippedQty, dynamicCabinet, d.status, `"${d.note}"`];
       csvRows.push(row.join(","));
     });
@@ -797,7 +807,7 @@ const App = () => {
                 <td className="p-2 border-r border-slate-200 text-right font-mono font-bold text-blue-600">{d.shippedDisplay || d.shippedQty}</td>
                 <td className="p-2 border-r border-slate-200 text-right font-mono text-red-500 font-bold">{d.orderQty - d.shippedQty !== 0 ? d.orderQty - d.shippedQty : ''}</td>
                 <td className="p-2 border-r border-slate-200 text-center text-xs font-bold text-blue-600">
-                  {d.cabinetNo || allGroupedInvoices[d.client]?.find(inv => inv.date === d.date)?.cabinetNo || '-'}
+                  {d.cabinetNo || allGroupedInvoices[d.client]?.find(inv => inv.date === d.date && inv.origin === (d.origin || 'ER'))?.cabinetNo || '-'}
                 </td>
                 <td className="p-2 text-center font-bold text-xs">{d.status}</td>
               </tr>
@@ -843,7 +853,7 @@ const App = () => {
                     <>
                       <td className="p-2"><input className="border rounded p-1 w-full" defaultValue={d.date} onChange={e => handleEditChange('date', e.target.value)} /></td>
                       <td className="p-2 font-bold">{d.client}</td>
-                      <td className="p-2"><input className="border rounded p-1 w-full font-bold text-blue-600" defaultValue={d.cabinetNo || allGroupedInvoices[d.client]?.find(inv => inv.date === d.date)?.cabinetNo || ''} onChange={e => handleEditChange('cabinetNo', e.target.value)} placeholder="Manual Override" /></td>
+                      <td className="p-2"><input className="border rounded p-1 w-full font-bold text-blue-600" defaultValue={d.cabinetNo || allGroupedInvoices[d.client]?.find(inv => inv.date === d.date && inv.origin === (d.origin || 'ER'))?.cabinetNo || ''} onChange={e => handleEditChange('cabinetNo', e.target.value)} placeholder="Manual Override" /></td>
                       <td className="p-2">
                           <select className="border rounded p-1 w-full" defaultValue={d.origin || 'ER'} onChange={e => handleEditChange('origin', e.target.value)}>
                               <option value="ER">ER</option>
@@ -864,7 +874,7 @@ const App = () => {
                       <td className="p-3 text-slate-500">{d.date}</td>
                       <td className="p-3 font-bold text-slate-700">{d.client}</td>
                       <td className="p-3 font-bold text-blue-600">
-                        {d.cabinetNo || allGroupedInvoices[d.client]?.find(inv => inv.date === d.date)?.cabinetNo || <span className="text-slate-300 italic text-xs">Auto</span>}
+                        {d.cabinetNo || allGroupedInvoices[d.client]?.find(inv => inv.date === d.date && inv.origin === (d.origin || 'ER'))?.cabinetNo || <span className="text-slate-300 italic text-xs">Auto</span>}
                       </td>
                       <td className="p-3 text-xs font-bold">{d.origin === 'China' ? <span className="text-red-500 bg-red-50 px-2 py-1 rounded">China</span> : <span className="text-blue-500 bg-blue-50 px-2 py-1 rounded">ER</span>}</td>
                       <td className="p-3 font-bold text-slate-800">{d.product}</td>
@@ -1030,6 +1040,7 @@ const App = () => {
               <tr><td colSpan="3" className="pt-2 pb-1 font-bold text-lg">ORDER "{item.product}"</td></tr>
               <tr className="text-sm">
                 <td className="w-1/3 py-1 font-bold uppercase">{item.color}</td>
+                {/* 移除 Math.round 確保單價保持完整小數點 */}
                 <td className="py-1 text-center font-mono">{item.shippedDisplay || item.shippedQty + ' Y'} x {item.price} = THB</td>
                 <td className="py-1 text-right font-bold text-base">{(Math.round(item.shippedQty * item.price)).toLocaleString()}</td>
               </tr>
