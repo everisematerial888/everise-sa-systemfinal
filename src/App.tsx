@@ -445,7 +445,6 @@ const App = () => {
             const isChina = file.name.toLowerCase().includes('china');
             const origin = isChina ? 'China' : 'ER';
 
-            // Keeps fallback for Chinese headers inside CSV files
             const getIdx = (keys) => headers.findIndex(h => keys.some(k => h.includes(k)));
             const idx = {
                 date: getIdx(['date', '日期']), client: getIdx(['client', '客戶']),
@@ -512,12 +511,13 @@ const App = () => {
   const sortedClients = useMemo(() => [...new Set(masterData.map(d => d.client))].sort(), [masterData]);
   const availableMonths = useMemo(() => [...new Set(masterData.map(d => d.date?.substring(0, 7)))].filter(Boolean).sort().reverse(), [masterData]);
 
+  // 【邏輯修正：確保同日期但不同產地會被拆成不同單據】
   const allGroupedInvoices = useMemo(() => {
     const res = {};
     sortedClients.forEach(c => {
         const rows = masterData.filter(d => d.client === c && d.shippedQty > 0);
         
-        // 修正重點：同時依據「日期」與「產地」分組，避免同一天出中國與倉庫時被合併
+        // 透過 Date + Origin 組合鍵來分群
         const dateOriginKeys = [...new Set(rows.map(r => `${r.date}|${r.origin || 'ER'}`))];
         
         dateOriginKeys.sort((a, b) => {
@@ -531,6 +531,7 @@ const App = () => {
         res[c] = dateOriginKeys.map((key, idx) => {
             const [date, origin] = key.split('|');
             const items = rows.filter(r => r.date === date && (r.origin || 'ER') === origin);
+            
             const conf = clientConfig[c] || { startNo: 1, prefix: c };
             const paddedNo = String(conf.startNo + idx).padStart(3, '0');
             
@@ -578,6 +579,7 @@ const App = () => {
     const headers = ["Date", "Order", "Origin", "Spec", "Color", "Order Qty", "Shipped", "Unshipped", "C/NO", "Status", "Note"];
     const csvRows = [headers.join(",")];
     filteredMasterData.forEach(d => {
+      // 匯出時也要同時比對 Date 與 Origin
       const dynamicCabinet = d.cabinetNo || allGroupedInvoices[d.client]?.find(inv => inv.date === d.date && inv.origin === (d.origin || 'ER'))?.cabinetNo || "";
       const row = [d.date, d.orderNo, d.origin, `"${d.product}"`, d.color, d.orderQty || 0, `"${d.shippedDisplay || d.shippedQty}"`, (d.orderQty || 0) - d.shippedQty, dynamicCabinet, d.status, `"${d.note}"`];
       csvRows.push(row.join(","));
@@ -807,6 +809,7 @@ const App = () => {
                 <td className="p-2 border-r border-slate-200 text-right font-mono font-bold text-blue-600">{d.shippedDisplay || d.shippedQty}</td>
                 <td className="p-2 border-r border-slate-200 text-right font-mono text-red-500 font-bold">{d.orderQty - d.shippedQty !== 0 ? d.orderQty - d.shippedQty : ''}</td>
                 <td className="p-2 border-r border-slate-200 text-center text-xs font-bold text-blue-600">
+                  {/* 表格顯示櫃號時，也加入 && inv.origin === (d.origin || 'ER') 進行比對 */}
                   {d.cabinetNo || allGroupedInvoices[d.client]?.find(inv => inv.date === d.date && inv.origin === (d.origin || 'ER'))?.cabinetNo || '-'}
                 </td>
                 <td className="p-2 text-center font-bold text-xs">{d.status}</td>
@@ -874,6 +877,7 @@ const App = () => {
                       <td className="p-3 text-slate-500">{d.date}</td>
                       <td className="p-3 font-bold text-slate-700">{d.client}</td>
                       <td className="p-3 font-bold text-blue-600">
+                        {/* 編輯模式下的顯示也加入 && inv.origin === (d.origin || 'ER') */}
                         {d.cabinetNo || allGroupedInvoices[d.client]?.find(inv => inv.date === d.date && inv.origin === (d.origin || 'ER'))?.cabinetNo || <span className="text-slate-300 italic text-xs">Auto</span>}
                       </td>
                       <td className="p-3 text-xs font-bold">{d.origin === 'China' ? <span className="text-red-500 bg-red-50 px-2 py-1 rounded">China</span> : <span className="text-blue-500 bg-blue-50 px-2 py-1 rounded">ER</span>}</td>
@@ -1040,7 +1044,6 @@ const App = () => {
               <tr><td colSpan="3" className="pt-2 pb-1 font-bold text-lg">ORDER "{item.product}"</td></tr>
               <tr className="text-sm">
                 <td className="w-1/3 py-1 font-bold uppercase">{item.color}</td>
-                {/* 移除 Math.round 確保單價保持完整小數點 */}
                 <td className="py-1 text-center font-mono">{item.shippedDisplay || item.shippedQty + ' Y'} x {item.price} = THB</td>
                 <td className="py-1 text-right font-bold text-base">{(Math.round(item.shippedQty * item.price)).toLocaleString()}</td>
               </tr>
